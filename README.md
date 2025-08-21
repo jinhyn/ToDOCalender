@@ -41,7 +41,7 @@
 git clone https://github.com/jinhyn/ToDOCalender.git
 cd ToDOCalender
 
-2. 백엔드 실행 (Django)
+### 2. 백엔드 실행 (Django)
 cd backend
 # 가상환경 생성
 python -m venv venv
@@ -55,7 +55,7 @@ python manage.py migrate
 python manage.py runserver
 
 
-3. 프론트엔드 실행
+### 3. 프론트엔드 실행
 cd frontend
 npm install
 npm run dev

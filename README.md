@@ -17,6 +17,22 @@
   - npm, Git, REST API
 
 ---
+✨ 주요 기능
 
-## 📂 프로젝트 구조
+✅ 할 일(ToDo) 등록 / 수정 / 삭제
 
+📅 캘린더 기반 일정 관리
+
+🔄 Drag & Drop 지원
+
+🌐 백엔드 API 연동
+
+📌 향후 개선 예정
+
+사용자 로그인/회원가입 기능
+
+DB 연동 (예: MongoDB, MySQL)
+
+클라우드 배포 (Vercel, Heroku, AWS 등)
+
+반응형 UI 개선

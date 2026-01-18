@@ -1,0 +1,8 @@
+backend/venv/
+forntend/node_modules/
+**/__pycache__/
+*.pyc
+db.sqlite3
+.env
+.DS_Store
+Thumbs.db

@@ -1,32 +1,28 @@
+import json
 from rest_framework import serializers
 from .models import Task, Category
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
-        fields = ['id', 'name']  # 카테고리의 id와 name만 반환
+        fields = ['id', 'name']
 
 class TaskSerializer(serializers.ModelSerializer):
-    category = CategorySerializer()  # 카테고리 정보를 포함
+    # 입력 시: 카테고리 ID(숫자)를 받음
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(),
+        allow_null=True,
+        required=False
+    )
+    # 출력 시: 카테고리 상세 정보를 포함
+    category_detail = CategorySerializer(source='category', read_only=True)
 
     class Meta:
         model = Task
-        fields = ['id', 'title', 'date', 'end', 'category', 'location', 'location_name']  # 필요한 필드
+        fields = ['id', 'title', 'date', 'end', 'category', 'category_detail', 'location', 'location_name']
 
-    def create(self, validated_data):
-        category_data = validated_data.pop('category')
-        category = Category.objects.get(id=category_data['id'])  # category ID로 카테고리 객체 찾기
-        task = Task.objects.create(category=category, **validated_data)
-        return task
-
-    def update(self, instance, validated_data):
-        category_data = validated_data.pop('category')
-        category = Category.objects.get(id=category_data['id'])  # category ID로 카테고리 객체 찾기
-        instance.title = validated_data.get('title', instance.title)
-        instance.date = validated_data.get('date', instance.date)
-        instance.end = validated_data.get('end', instance.end)
-        instance.category = category
-        instance.location = validated_data.get('location', instance.location)
-        instance.location_name = validated_data.get('location_name', instance.location_name)
-        instance.save()
-        return instance
+    # location 객체가 들어오면 문자열로 변환하여 저장
+    def validate_location(self, value):
+        if isinstance(value, dict):
+            return json.dumps(value)
+        return value

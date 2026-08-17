@@ -93,13 +93,23 @@ class UserDataIsolationTests(APITestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_category_reorder_requires_all_owned_categories(self):
-        second = Category.objects.create(user=self.user_a, name="A2", color="#0000FF")
+        second = Category.objects.create(user=self.user_a, name="A2", color="#0000FF", order=1)
         self.client.force_authenticate(self.user_a)
         response = self.client.patch(
             reverse("category-reorder"),
-            {"orders": [{"id": self.category_a.id}]},
+            {"orders": [{"id": second.id}, {"id": self.category_a.id}]},
             format="json",
         )
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(self.category_a.order, 0)
+        self.assertEqual(response.status_code, 200)
+        self.category_a.refresh_from_db()
+        second.refresh_from_db()
         self.assertEqual(second.order, 0)
+        self.assertEqual(self.category_a.order, 1)
+
+    def test_category_delete_preserves_tasks_and_unlinks_category(self):
+        self.client.force_authenticate(self.user_a)
+        response = self.client.delete(reverse("category-detail", args=[self.category_a.id]))
+        self.assertEqual(response.status_code, 204)
+        self.assertTrue(Task.objects.filter(pk=self.task_a.id).exists())
+        self.task_a.refresh_from_db()
+        self.assertIsNone(self.task_a.category_id)

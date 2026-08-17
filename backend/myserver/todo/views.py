@@ -5,6 +5,7 @@ from rest_framework.response import Response
 
 from .models import Category, Task
 from .serializers import CategorySerializer, TaskSerializer
+from .travel import calculate_travel_warnings
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -49,3 +50,12 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return Task.objects.filter(user=self.request.user).select_related("category")
+
+    @action(detail=False, methods=["get"], url_path="travel-warnings")
+    def travel_warnings(self, request):
+        tasks = list(self.get_queryset().order_by("date", "id"))
+        if len(tasks) < 2:
+            return Response({"warnings": []})
+
+        warnings = calculate_travel_warnings(tasks)
+        return Response({"warnings": warnings})

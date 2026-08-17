@@ -4,7 +4,7 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 
-const CalendarDisplay = forwardRef(({ tasks, categories, filterTag, onDateClick, onEventClick, onEventOperation }, ref) => {
+const CalendarDisplay = forwardRef(({ tasks, categories, filterTag, travelWarnings, onDateClick, onEventClick, onEventOperation }, ref) => {
   const calendarRefInternal = useRef(null);
 
   useImperativeHandle(ref, () => ({
@@ -23,6 +23,11 @@ const CalendarDisplay = forwardRef(({ tasks, categories, filterTag, onDateClick,
     }
   };
 
+  const formatDuration = (seconds) => {
+    const minutes = Math.max(0, Math.ceil((seconds || 0) / 60));
+    return `${minutes}분`;
+  };
+
   const getContrastingTextColor = (hexColor) => {
     if (!hexColor || hexColor.length < 7) return '#ffffff';
     const r = parseInt(hexColor.slice(1, 3), 16);
@@ -35,6 +40,7 @@ const CalendarDisplay = forwardRef(({ tasks, categories, filterTag, onDateClick,
   const filteredTasks = tasks.filter((t) => (filterTag === '전체' ? true : t.tag === filterTag));
   const events = filteredTasks.map((t) => {
     const cat = categories.find((c) => c.name === t.tag) || categories.find((c) => c.name === '일반');
+    const travelWarning = travelWarnings?.[t.id] || null;
     return {
       title: t.title,
       start: t.date,
@@ -44,7 +50,7 @@ const CalendarDisplay = forwardRef(({ tasks, categories, filterTag, onDateClick,
       borderColor: cat?.color || '#3788d8',
       textColor: cat ? getContrastingTextColor(cat.color) : '#ffffff',
       display: 'block',
-      extendedProps: { originalTask: t, locationName: t.locationName || '' },
+      extendedProps: { originalTask: t, locationName: t.locationName || '', travelWarning },
     };
   });
 
@@ -53,6 +59,7 @@ const CalendarDisplay = forwardRef(({ tasks, categories, filterTag, onDateClick,
     const startTime = formatTime(eventInfo.event.start);
     const endTime = formatTime(eventInfo.event.end);
     const locationName = eventInfo.event.extendedProps.locationName;
+    const travelWarning = eventInfo.event.extendedProps.travelWarning;
     const timeText = isMonthView ? `${startTime}${endTime ? ` - ${endTime}` : ''}` : eventInfo.timeText;
 
     return (
@@ -60,6 +67,7 @@ const CalendarDisplay = forwardRef(({ tasks, categories, filterTag, onDateClick,
         <div className="calendar-event-time">{timeText}</div>
         <div className="calendar-event-title">{eventInfo.event.title}</div>
         {locationName && <div className="calendar-event-location"><span aria-hidden="true">📍</span> {locationName}</div>}
+        {travelWarning && <div className="calendar-event-warning"><span aria-hidden="true">⚠️</span> 이동 {formatDuration(travelWarning.travel_seconds)} 필요</div>}
       </div>
     );
   };

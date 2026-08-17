@@ -26,14 +26,14 @@
 
 | 폴더 / 파일          | 설명                                         |
 |--------------------|--------------------------------------------|
-| backend/           | Django 서버 코드                              |
-| frontend/          | React 프론트엔드 코드 (UI, 캘린더, ToDo 관리) |
-| node_modules/      | 프론트엔드 의존성 (gitignore 대상)           |
-| manage.py           | Django 관리 파일                             |
-| requirements.txt    | Python 패키지 목록                            |
-| package.json        | 프론트엔드 패키지 정보                         |
-| package-lock.json   | 프론트엔드 패키지 잠금 파일                    |
-| README.md           | 프로젝트 설명 문서                            |
+| backend/            | Django 서버 코드                              |
+| frontend/           | React 프론트엔드 코드 (UI, 캘린더, ToDo 관리) |
+| node_modules/       | 프론트엔드 의존성 (gitignore 대상)           |
+| manage.py            | Django 관리 파일                             |
+| requirements.txt     | Python 패키지 목록                            |
+| package.json         | 프론트엔드 패키지 정보                         |
+| package-lock.json    | 프론트엔드 패키지 잠금 파일                    |
+| README.md            | 프로젝트 설명 문서                            |
 
 ---
 
@@ -62,7 +62,7 @@ python manage.py runserver
 
 ### 3. 이동시간 경고 기능 설정
 
-이 기능은 **Kakao Mobility REST API 키**를 백엔드에서 사용합니다. REST API 키는 브라우저에 노출하지 않고 Django 환경변수로만 설정합니다. Kakao Mobility의 일반 길찾기는 `duration`(예상 소요 시간)과 `distance`를 제공하며, 미래 일정은 미래 운행 정보 API를 사용할 수 있습니다. citehttps://developers.kakaomobility.com/guide/navi-api/directions
+이 기능은 **Kakao Mobility REST API 키**를 백엔드에서 사용합니다. REST API 키는 브라우저에 노출하지 않고 Django 환경변수로만 설정합니다.
 
 Windows PowerShell에서 Django 서버를 실행하기 전에:
 
@@ -73,7 +73,7 @@ python manage.py runserver
 
 기존 Django 서버가 실행 중이었다면 **환경변수를 설정한 뒤 서버를 다시 시작**해야 합니다.
 
-REST API 키는 카카오디벨로퍼스에서 앱의 플랫폼 키를 통해 확인할 수 있습니다. citehttps://developers.kakaomobility.com/guide/navi-api/start
+REST API 키는 카카오디벨로퍼스에서 앱의 플랫폼 키를 통해 확인할 수 있습니다.
 
 > 기존 Kakao Maps JavaScript 키와 REST API 키는 용도가 다릅니다. 이동시간 계산은 REST API 키가 필요합니다.
 
@@ -110,7 +110,7 @@ npm run dev
         ⚠️ 이동시간 부족
 ```
 
-미래 일정은 해당 일정의 예정 출발 시각을 기준으로 미래 운행 정보 길찾기를 사용하고, 이미 지난 시각은 현재 길찾기 정보를 사용합니다. Kakao Mobility 문서상 미래 운행 정보 API는 `YYYYMMDDHHMM` 형식의 미래 출발 시각을 받아 예상 이동시간을 제공합니다. citehttps://developers.kakaomobility.com/guide/navi-api/future
+미래 일정은 해당 일정의 예정 출발 시각을 기준으로 미래 운행 정보 길찾기를 사용하고, 이미 지난 시각은 현재 길찾기 정보를 사용합니다. Kakao Mobility의 미래 운행 정보 API는 미래 출발 시각을 지정해 예상 이동시간을 계산할 수 있습니다.
 
 ---
 

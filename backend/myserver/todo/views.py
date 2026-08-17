@@ -1,3 +1,5 @@
+import logging
+
 from django.db import transaction
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
@@ -6,6 +8,9 @@ from rest_framework.response import Response
 from .models import Category, Task
 from .serializers import CategorySerializer, TaskSerializer
 from .travel import calculate_travel_warnings
+
+
+logger = logging.getLogger(__name__)
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -54,8 +59,22 @@ class TaskViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="travel-warnings")
     def travel_warnings(self, request):
         tasks = list(self.get_queryset().order_by("date", "id"))
+        logger.warning("Travel warning check: %d tasks", len(tasks))
+        for task in tasks:
+            logger.warning(
+                "Travel task #%s: title=%r date=%s end=%s location=%r location_name=%r",
+                task.id,
+                task.title,
+                task.date,
+                task.end,
+                task.location,
+                task.location_name,
+            )
+
         if len(tasks) < 2:
+            logger.warning("Travel warning result: skipped because fewer than 2 tasks")
             return Response({"warnings": []})
 
         warnings = calculate_travel_warnings(tasks)
+        logger.warning("Travel warning result: %d warnings", len(warnings))
         return Response({"warnings": warnings})

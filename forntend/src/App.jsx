@@ -13,38 +13,46 @@ export default function App() {
   const [popupInitialData, setPopupInitialData] = useState(null);
   const [apiCategories, setApiCategories] = useState([]);
   const [apiTasks, setApiTasks] = useState([]);
-
   const memoizedCategories = useMemo(() => apiCategories, [apiCategories]);
 
   const fetchCategories = useCallback(async () => {
     if (!user) return;
-    try {
-      const response = await api.get('categories/');
-      setApiCategories(response.data);
-    } catch (error) { console.error('Categories load failed', error); }
+    const response = await api.get('categories/');
+    setApiCategories(response.data);
   }, [user]);
 
   const fetchTasks = useCallback(async () => {
     if (!user) return;
-    try {
-      const response = await api.get('tasks/');
-      const processedTasks = response.data.map((task) => ({
-        ...task,
-        location: typeof task.location === 'string' ? safeParseLocation(task.location) : task.location,
-      }));
-      setApiTasks(processedTasks);
-    } catch (error) { console.error('Tasks load failed', error); }
+    const response = await api.get('tasks/');
+    setApiTasks(response.data.map((task) => ({
+      ...task,
+      location: typeof task.location === 'string' ? safeParseLocation(task.location) : task.location,
+    })));
   }, [user]);
 
   useEffect(() => {
     if (!user) {
       setApiCategories([]);
       setApiTasks([]);
+      setFilterTag('전체');
       return;
     }
-    fetchCategories();
-    fetchTasks();
+    Promise.all([fetchCategories(), fetchTasks()]).catch((error) => console.error('Initial data load failed', error));
   }, [user, fetchCategories, fetchTasks]);
+
+  const reorderCategories = useCallback(async (categories) => {
+    const previous = apiCategories;
+    setApiCategories(categories);
+    try {
+      const response = await api.patch('categories/reorder/', {
+        orders: categories.map((category) => ({ id: category.id })),
+      });
+      setApiCategories(response.data);
+    } catch (error) {
+      setApiCategories(previous);
+      throw error;
+    }
+  }, [apiCategories]);
 
   const handleSaveTask = useCallback(async (taskData) => {
     try {
@@ -81,7 +89,7 @@ export default function App() {
 
   return (
     <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-      <header style={{display: 'flex', justifyContent: 'space-between', marginBottom: '25px'}}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '25px' }}>
         <h1>✅ My Calendar</h1>
         <KakaoAuthDisplay user={user} loginWithKakao={loginWithKakao} logout={logout} />
       </header>
@@ -90,13 +98,13 @@ export default function App() {
           categories={memoizedCategories}
           setFilterTag={setFilterTag}
           currentFilterTag={filterTag}
+          reorderCategories={reorderCategories}
           addCategory={async (name, color) => { await api.post('categories/', { name, color }); await fetchCategories(); }}
           deleteCategory={async (name) => {
             const cat = apiCategories.find((c) => c.name === name);
             if (cat) {
               await api.delete(`categories/${cat.id}/`);
-              await fetchCategories();
-              await fetchTasks();
+              await Promise.all([fetchCategories(), fetchTasks()]);
               if (filterTag === name) setFilterTag('전체');
             }
           }}

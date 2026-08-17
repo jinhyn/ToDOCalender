@@ -7,6 +7,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from .models import Category, Task
+from .travel import calculate_travel_warnings
 
 
 class UserDataIsolationTests(APITestCase):
@@ -168,3 +169,31 @@ class TravelWarningTests(APITestCase):
         self.assertEqual(response.data["warnings"], [])
         tasks = calculate.call_args.args[0]
         self.assertTrue(all(task.user_id == self.user.id for task in tasks))
+
+    @patch("todo.travel._request_travel_time")
+    def test_calculates_warning_when_fastest_travel_time_exceeds_gap(self, request):
+        previous = self._task("이전 일정", 0, 60, '{"lat":37.5,"lng":126.9}', "출발지")
+        next_task = self._task("다음 일정", 80, 120, '{"lat":37.6,"lng":127.0}', "목적지")
+        request.return_value = {"duration": 30 * 60, "distance": 10000}
+
+        warnings = calculate_travel_warnings([previous, next_task])
+
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(warnings[0]["next_task_id"], next_task.id)
+        self.assertEqual(warnings[0]["available_seconds"], 20 * 60)
+        self.assertEqual(warnings[0]["deficit_seconds"], 10 * 60)
+        request.assert_called_once_with(
+            {"lat": 37.5, "lng": 126.9},
+            {"lat": 37.6, "lng": 127.0},
+            previous.end,
+        )
+
+    @patch("todo.travel._request_travel_time")
+    def test_does_not_call_routing_for_same_location(self, request):
+        previous = self._task("이전 일정", 0, 60, '{"lat":37.5,"lng":126.9}', "같은 장소")
+        next_task = self._task("다음 일정", 70, 120, '{"lat":37.5,"lng":126.9}', "같은 장소")
+
+        warnings = calculate_travel_warnings([previous, next_task])
+
+        self.assertEqual(warnings, [])
+        request.assert_not_called()

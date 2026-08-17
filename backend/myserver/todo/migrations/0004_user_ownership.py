@@ -12,7 +12,9 @@ def assign_existing_data_to_legacy_user(apps, schema_editor):
         username="legacy_migrated_data",
         defaults={"first_name": "Migrated Data"},
     )
-    legacy_user.set_unusable_password()
+    # Historical migration models do not expose User model helper methods.
+    # Django treats passwords beginning with '!' as unusable.
+    legacy_user.password = "!"
     legacy_user.save(update_fields=["password"])
 
     categories = list(Category.objects.filter(user__isnull=True).order_by("id"))

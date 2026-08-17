@@ -16,11 +16,20 @@ def assign_existing_data_to_legacy_user(apps, schema_editor):
     legacy_user.save(update_fields=["password"])
 
     categories = list(Category.objects.filter(user__isnull=True).order_by("id"))
+    used_names = set()
     for order, category in enumerate(categories):
+        original_name = category.name
+        candidate = original_name
+        suffix = 2
+        while candidate in used_names:
+            candidate = f"{original_name} ({suffix})"
+            suffix += 1
+        category.name = candidate
         category.user = legacy_user
         category.order = order
+        used_names.add(candidate)
     if categories:
-        Category.objects.bulk_update(categories, ["user", "order"])
+        Category.objects.bulk_update(categories, ["name", "user", "order"])
 
     Task.objects.filter(user__isnull=True).update(user=legacy_user)
 
@@ -42,12 +51,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="category",
             name="user",
-            field=models.ForeignKey(
-                null=True,
-                on_delete=django.db.models.deletion.CASCADE,
-                related_name="categories",
-                to=settings.AUTH_USER_MODEL,
-            ),
+            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, related_name="categories", to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name="category",
@@ -57,41 +61,22 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="task",
             name="user",
-            field=models.ForeignKey(
-                null=True,
-                on_delete=django.db.models.deletion.CASCADE,
-                related_name="tasks",
-                to=settings.AUTH_USER_MODEL,
-            ),
+            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, related_name="tasks", to=settings.AUTH_USER_MODEL),
         ),
         migrations.RunPython(assign_existing_data_to_legacy_user, reverse_ownership),
         migrations.AlterField(
             model_name="category",
             name="user",
-            field=models.ForeignKey(
-                on_delete=django.db.models.deletion.CASCADE,
-                related_name="categories",
-                to=settings.AUTH_USER_MODEL,
-            ),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name="categories", to=settings.AUTH_USER_MODEL),
         ),
         migrations.AlterField(
             model_name="task",
             name="user",
-            field=models.ForeignKey(
-                on_delete=django.db.models.deletion.CASCADE,
-                related_name="tasks",
-                to=settings.AUTH_USER_MODEL,
-            ),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name="tasks", to=settings.AUTH_USER_MODEL),
         ),
-        migrations.AlterModelOptions(
-            name="category",
-            options={"ordering": ["order", "id"]},
-        ),
+        migrations.AlterModelOptions(name="category", options={"ordering": ["order", "id"]}),
         migrations.AddConstraint(
             model_name="category",
-            constraint=models.UniqueConstraint(
-                fields=("user", "name"),
-                name="unique_category_name_per_user",
-            ),
+            constraint=models.UniqueConstraint(fields=("user", "name"), name="unique_category_name_per_user"),
         ),
     ]

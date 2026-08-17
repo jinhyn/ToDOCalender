@@ -23,14 +23,18 @@ class CategoryViewSet(viewsets.ModelViewSet):
         category_ids = [item.get("id") for item in orders if isinstance(item, dict)]
         if len(category_ids) != len(orders) or any(value is None for value in category_ids):
             return Response({"orders": "Each item must contain an id."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(set(category_ids)) != len(category_ids):
+            return Response({"orders": "Category ids must be unique."}, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
-            categories = {
-                category.id: category
-                for category in self.get_queryset().filter(id__in=category_ids)
-            }
-            if len(categories) != len(category_ids) or len(set(category_ids)) != len(category_ids):
-                return Response({"orders": "Categories must belong to the authenticated user."}, status=status.HTTP_400_BAD_REQUEST)
+            queryset = self.get_queryset()
+            categories = {category.id: category for category in queryset.filter(id__in=category_ids)}
+            owned_ids = set(queryset.values_list("id", flat=True))
+            if set(category_ids) != owned_ids:
+                return Response(
+                    {"orders": "Orders must include every category owned by the authenticated user."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             for order, category_id in enumerate(category_ids):
                 categories[category_id].order = order

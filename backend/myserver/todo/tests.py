@@ -40,6 +40,30 @@ class UserDataIsolationTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual([item["id"] for item in response.data], [self.category_a.id])
 
+    def test_cannot_update_or_delete_another_users_task(self):
+        self.client.force_authenticate(self.user_a)
+        update = self.client.patch(
+            reverse("task-detail", args=[self.task_b.id]),
+            {"title": "hijacked"},
+            format="json",
+        )
+        self.assertEqual(update.status_code, 404)
+        delete = self.client.delete(reverse("task-detail", args=[self.task_b.id]))
+        self.assertEqual(delete.status_code, 404)
+        self.assertTrue(Task.objects.filter(pk=self.task_b.id).exists())
+
+    def test_cannot_update_or_delete_another_users_category(self):
+        self.client.force_authenticate(self.user_a)
+        update = self.client.patch(
+            reverse("category-detail", args=[self.category_b.id]),
+            {"name": "hijacked"},
+            format="json",
+        )
+        self.assertEqual(update.status_code, 404)
+        delete = self.client.delete(reverse("category-detail", args=[self.category_b.id]))
+        self.assertEqual(delete.status_code, 404)
+        self.assertTrue(Category.objects.filter(pk=self.category_b.id).exists())
+
     def test_cannot_assign_another_users_category(self):
         self.client.force_authenticate(self.user_a)
         response = self.client.post(reverse("task-list"), {
@@ -59,7 +83,7 @@ class UserDataIsolationTests(APITestCase):
         }, format="json")
         self.assertEqual(response.status_code, 400)
 
-    def test_category_reorder_only_accepts_owned_categories(self):
+    def test_category_reorder_rejects_another_users_category(self):
         self.client.force_authenticate(self.user_a)
         response = self.client.patch(
             reverse("category-reorder"),
@@ -67,3 +91,15 @@ class UserDataIsolationTests(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_category_reorder_requires_all_owned_categories(self):
+        second = Category.objects.create(user=self.user_a, name="A2", color="#0000FF")
+        self.client.force_authenticate(self.user_a)
+        response = self.client.patch(
+            reverse("category-reorder"),
+            {"orders": [{"id": self.category_a.id}]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.category_a.order, 0)
+        self.assertEqual(second.order, 0)

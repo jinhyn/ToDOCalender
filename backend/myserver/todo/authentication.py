@@ -50,7 +50,9 @@ class KakaoTokenAuthentication(authentication.BaseAuthentication):
             with urlopen(request, timeout=5) as response:
                 return json.loads(response.read().decode("utf-8"))
         except (HTTPError, URLError, ValueError) as exc:
-            raise exceptions.AuthenticationFailed("Kakao access token is invalid or expired.") from exc
+            raise exceptions.AuthenticationFailed(
+                "Kakao access token is invalid or expired."
+            ) from exc
 
     @staticmethod
     def _get_display_name(kakao_user):

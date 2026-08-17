@@ -54,6 +54,29 @@ export default function App() {
     }
   }, [apiCategories]);
 
+  const handleEventOperation = useCallback(async (operationInfo, operationType) => {
+    const task = operationInfo.event.extendedProps.originalTask;
+    const start = operationInfo.event.start;
+    const end = operationInfo.event.end;
+
+    if (!task?.id || !start) {
+      operationInfo.revert();
+      return;
+    }
+
+    try {
+      await api.patch(`tasks/${task.id}/`, {
+        date: start.toISOString(),
+        end: end ? end.toISOString() : null,
+      });
+      await fetchTasks();
+    } catch (error) {
+      operationInfo.revert();
+      console.error(`Calendar ${operationType} failed`, error);
+      alert('일정 변경에 실패했습니다. 원래 위치로 되돌렸습니다.');
+    }
+  }, [fetchTasks]);
+
   const handleSaveTask = useCallback(async (taskData) => {
     try {
       const isEdit = !!taskData.id;
@@ -119,6 +142,7 @@ export default function App() {
             setPopupInitialData({ task, onDelete: handleDeleteTask });
             setShowPopup(true);
           }}
+          onEventOperation={handleEventOperation}
         />
       </main>
       {showPopup && <TaskPopup key="task-popup-stable" show={showPopup} onClose={() => setShowPopup(false)} onSave={handleSaveTask} categories={memoizedCategories} initialData={popupInitialData} />}

@@ -15,147 +15,78 @@ export default function App() {
   const [apiTasks, setApiTasks] = useState([]);
   const memoizedCategories = useMemo(() => apiCategories, [apiCategories]);
 
-  const fetchCategories = useCallback(async () => {
-    if (!user) return;
-    const response = await api.get('categories/');
-    setApiCategories(response.data);
-  }, [user]);
-
+  const fetchCategories = useCallback(async () => { if (!user) return; const response = await api.get('categories/'); setApiCategories(response.data); }, [user]);
   const fetchTasks = useCallback(async () => {
     if (!user) return;
     const response = await api.get('tasks/');
-    setApiTasks(response.data.map((task) => ({
-      ...task,
-      tag: task.category_detail?.name || '일반',
-      location: typeof task.location === 'string' ? safeParseLocation(task.location) : task.location,
-    })));
+    setApiTasks(response.data.map((task) => ({ ...task, tag: task.category_detail?.name || '일반', location: typeof task.location === 'string' ? safeParseLocation(task.location) : task.location })));
   }, [user]);
 
   useEffect(() => {
-    if (!user) {
-      setApiCategories([]);
-      setApiTasks([]);
-      setFilterTag('전체');
-      return;
-    }
+    if (!user) { setApiCategories([]); setApiTasks([]); setFilterTag('전체'); return; }
     Promise.all([fetchCategories(), fetchTasks()]).catch((error) => console.error('Initial data load failed', error));
   }, [user, fetchCategories, fetchTasks]);
 
   const reorderCategories = useCallback(async (categories) => {
     const previous = apiCategories;
     setApiCategories(categories);
-    try {
-      const response = await api.patch('categories/reorder/', {
-        orders: categories.map((category) => ({ id: category.id })),
-      });
-      setApiCategories(response.data);
-    } catch (error) {
-      setApiCategories(previous);
-      throw error;
-    }
+    try { const response = await api.patch('categories/reorder/', { orders: categories.map((category) => ({ id: category.id })) }); setApiCategories(response.data); }
+    catch (error) { setApiCategories(previous); throw error; }
   }, [apiCategories]);
 
   const handleEventOperation = useCallback(async (operationInfo, operationType) => {
     const task = operationInfo.event.extendedProps.originalTask;
     const start = operationInfo.event.start;
     const end = operationInfo.event.end;
-
-    if (!task?.id || !start) {
-      operationInfo.revert();
-      return;
-    }
-
-    try {
-      await api.patch(`tasks/${task.id}/`, {
-        date: start.toISOString(),
-        end: end ? end.toISOString() : null,
-      });
-      await fetchTasks();
-    } catch (error) {
-      operationInfo.revert();
-      console.error(`Calendar ${operationType} failed`, error);
-      alert('일정 변경에 실패했습니다. 원래 위치로 되돌렸습니다.');
-    }
+    if (!task?.id || !start) { operationInfo.revert(); return; }
+    try { await api.patch(`tasks/${task.id}/`, { date: start.toISOString(), end: end ? end.toISOString() : null }); await fetchTasks(); }
+    catch (error) { operationInfo.revert(); console.error(`Calendar ${operationType} failed`, error); alert('일정 변경에 실패했습니다. 원래 위치로 되돌렸습니다.'); }
   }, [fetchTasks]);
 
   const handleSaveTask = useCallback(async (taskData) => {
     try {
       const isEdit = !!taskData.id;
       const url = isEdit ? `tasks/${taskData.id}/` : 'tasks/';
-      const payload = {
-        ...taskData,
-        category: apiCategories.find((c) => c.name === taskData.tag)?.id || null,
-        location: typeof taskData.location === 'object' ? JSON.stringify(taskData.location) : taskData.location,
-      };
-      if (isEdit) await api.put(url, payload);
-      else await api.post(url, payload);
-      await fetchTasks();
-      setShowPopup(false);
-    } catch (error) {
-      alert(`저장 실패: ${JSON.stringify(error.response?.data || error.message)}`);
-    }
+      const payload = { ...taskData, category: apiCategories.find((c) => c.name === taskData.tag)?.id || null, location: typeof taskData.location === 'object' ? JSON.stringify(taskData.location) : taskData.location };
+      if (isEdit) await api.put(url, payload); else await api.post(url, payload);
+      await fetchTasks(); setShowPopup(false);
+    } catch (error) { alert(`저장 실패: ${JSON.stringify(error.response?.data || error.message)}`); }
   }, [apiCategories, fetchTasks]);
 
   const handleDeleteTask = useCallback(async (taskId) => {
     if (!taskId || !window.confirm('정말로 삭제하시겠습니까?')) return;
-    try {
-      await api.delete(`tasks/${taskId}/`);
-      await fetchTasks();
-      setShowPopup(false);
-    } catch (error) {
-      console.error('Delete failed', error);
-      alert('삭제에 실패했습니다.');
-    }
+    try { await api.delete(`tasks/${taskId}/`); await fetchTasks(); setShowPopup(false); }
+    catch (error) { console.error('Delete failed', error); alert('삭제에 실패했습니다.'); }
   }, [fetchTasks]);
 
   const handleDeleteCategory = useCallback(async (categoryId, categoryName) => {
     if (!categoryId) return;
     if (filterTag === categoryName) setFilterTag('전체');
-    try {
-      await api.delete(`categories/${categoryId}/`);
-      await Promise.all([fetchCategories(), fetchTasks()]);
-    } catch (error) {
-      console.error('Category delete failed', error);
-      alert(`카테고리 삭제에 실패했습니다: ${JSON.stringify(error.response?.data || error.message)}`);
-    }
+    try { await api.delete(`categories/${categoryId}/`); await Promise.all([fetchCategories(), fetchTasks()]); }
+    catch (error) { console.error('Category delete failed', error); alert(`카테고리 삭제에 실패했습니다: ${JSON.stringify(error.response?.data || error.message)}`); }
   }, [filterTag, fetchCategories, fetchTasks]);
 
   if (!isKakaoAuthSdkLoaded) return <div>로딩 중...</div>;
   if (!user) return <KakaoAuthDisplay user={null} loginWithKakao={loginWithKakao} logout={logout} />;
 
   return (
-    <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '25px' }}>
-        <h1>✅ My Calendar</h1>
-        <KakaoAuthDisplay user={user} loginWithKakao={loginWithKakao} logout={logout} />
+    <div style={{ minHeight: '100vh' }}>
+      <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+          <div><div style={{ fontSize: 12, color: '#9ca3af', fontWeight: 600, letterSpacing: '.08em' }}>MY CALENDAR</div><h1 style={{ margin: '3px 0 0', fontSize: 24, letterSpacing: '-.03em' }}>나의 일정</h1></div>
+          <KakaoAuthDisplay user={user} logout={logout} loginWithKakao={loginWithKakao} />
+        </div>
       </header>
-      <main>
-        <CategoryManager
-          categories={memoizedCategories}
-          setFilterTag={setFilterTag}
-          currentFilterTag={filterTag}
-          reorderCategories={reorderCategories}
-          addCategory={async (name, color) => { await api.post('categories/', { name, color }); await fetchCategories(); }}
-          deleteCategory={handleDeleteCategory}
-        />
-        <CalendarDisplay
-          tasks={apiTasks}
-          categories={memoizedCategories}
-          filterTag={filterTag}
-          onDateClick={(info) => { setPopupInitialData({ defaultDate: info.dateStr }); setShowPopup(true); }}
-          onEventClick={(info) => {
-            const task = info.event.extendedProps.originalTask;
-            setPopupInitialData({ task, onDelete: handleDeleteTask });
-            setShowPopup(true);
-          }}
-          onEventOperation={handleEventOperation}
-        />
+      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '24px' }}>
+        <section style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 18, padding: '16px 18px 6px', marginBottom: 18, boxShadow: '0 8px 30px rgba(15,23,42,.04)' }}>
+          <div style={{ marginBottom: 8 }}><div style={{ fontWeight: 700 }}>카테고리</div><div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>드래그해서 순서를 바꿀 수 있어요</div></div>
+          <CategoryManager categories={memoizedCategories} setFilterTag={setFilterTag} currentFilterTag={filterTag} reorderCategories={reorderCategories} addCategory={async (name, color) => { await api.post('categories/', { name, color }); await fetchCategories(); }} deleteCategory={handleDeleteCategory} />
+        </section>
+        <section className="calendar-shell"><CalendarDisplay tasks={apiTasks} categories={memoizedCategories} filterTag={filterTag} onDateClick={(info) => { setPopupInitialData({ defaultDate: info.dateStr }); setShowPopup(true); }} onEventClick={(info) => { const task = info.event.extendedProps.originalTask; setPopupInitialData({ task, onDelete: handleDeleteTask }); setShowPopup(true); }} onEventOperation={handleEventOperation} /></section>
       </main>
       {showPopup && <TaskPopup key="task-popup-stable" show={showPopup} onClose={() => setShowPopup(false)} onSave={handleSaveTask} categories={memoizedCategories} initialData={popupInitialData} />}
     </div>
   );
 }
 
-function safeParseLocation(value) {
-  try { return JSON.parse(value); } catch { return value; }
-}
+function safeParseLocation(value) { try { return JSON.parse(value); } catch { return value; } }

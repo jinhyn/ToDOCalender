@@ -14,6 +14,7 @@ export default function CategoryManager({
   categories,
   addCategory,
   deleteCategory,
+  reorderCategories,
   setFilterTag,
   currentFilterTag
 }) {
@@ -26,6 +27,17 @@ export default function CategoryManager({
     
     await addCategory(newCategoryName, newCategoryColor);
     setNewCategoryName('');
+  };
+
+  const handleDragEnd = (result) => {
+    const { source, destination } = result;
+    if (!destination || destination.index === source.index) return;
+
+    const reordered = Array.from(categories);
+    const [moved] = reordered.splice(source.index, 1);
+    reordered.splice(destination.index, 0, moved);
+
+    reorderCategories(reordered.map((c) => c.id));
   };
 
   return (
@@ -49,7 +61,7 @@ export default function CategoryManager({
         </button>
       </div>
 
-      <DragDropContext onDragEnd={() => {}}>
+      <DragDropContext onDragEnd={handleDragEnd}>
         <Droppable droppableId="categories" direction="horizontal">
           {(provided) => (
             <div {...provided.droppableProps} ref={provided.innerRef} style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '20px' }}>
@@ -67,7 +79,7 @@ export default function CategoryManager({
                         padding: '8px 16px',
                         borderRadius: '20px',
                         border: currentFilterTag === cat.name ? '2px solid black' : 'none',
-                        cursor: 'pointer',
+                        cursor: 'grab',
                         ...providedD.draggableProps.style
                       }}
                     >

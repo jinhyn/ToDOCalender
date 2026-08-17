@@ -1,5 +1,4 @@
 import json
-from datetime import datetime
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -9,6 +8,7 @@ from django.utils import timezone
 
 
 KAKAO_DIRECTIONS_URL = "https://apis-navi.kakaomobility.com/v1/directions"
+KAKAO_FUTURE_DIRECTIONS_URL = "https://apis-navi.kakaomobility.com/v1/future/directions"
 
 
 def _parse_location(value):
@@ -29,19 +29,24 @@ def _parse_location(value):
     return {"lat": lat, "lng": lng}
 
 
-def _request_travel_time(origin, destination):
+def _request_travel_time(origin, destination, departure_time=None):
     api_key = getattr(settings, "KAKAO_REST_API_KEY", "")
     if not api_key:
         return None
 
+    use_future = departure_time is not None and departure_time > timezone.now()
+    url = KAKAO_FUTURE_DIRECTIONS_URL if use_future else KAKAO_DIRECTIONS_URL
     params = {
         "origin": f'{origin["lng"]},{origin["lat"]}',
         "destination": f'{destination["lng"]},{destination["lat"]}',
         "priority": "RECOMMEND",
         "summary": "true",
     }
+    if use_future:
+        params["departure_time"] = departure_time.astimezone(timezone.get_current_timezone()).strftime("%Y%m%d%H%M")
+
     request = Request(
-        f"{KAKAO_DIRECTIONS_URL}?{urlencode(params)}",
+        f"{url}?{urlencode(params)}",
         headers={
             "Authorization": f"KakaoAK {api_key}",
             "Content-Type": "application/json",
@@ -51,8 +56,9 @@ def _request_travel_time(origin, destination):
     try:
         with urlopen(request, timeout=8) as response:
             payload = json.loads(response.read().decode("utf-8"))
-        duration = payload.get("routes", [{}])[0].get("summary", {}).get("duration")
-        distance = payload.get("routes", [{}])[0].get("summary", {}).get("distance")
+        summary = payload.get("routes", [{}])[0].get("summary", {})
+        duration = summary.get("duration")
+        distance = summary.get("distance")
         if duration is None:
             return None
         return {"duration": int(duration), "distance": int(distance or 0)}
@@ -76,7 +82,6 @@ def calculate_travel_warnings(tasks):
 
         gap_seconds = int((next_task.date - previous.end).total_seconds())
         if gap_seconds < 0:
-            # Overlapping schedules are already impossible without travel time.
             warnings.append({
                 "previous_task_id": previous.id,
                 "next_task_id": next_task.id,
@@ -92,11 +97,12 @@ def calculate_travel_warnings(tasks):
             })
             continue
 
-        # Identical coordinates do not require a routing request.
         if previous_location == next_location:
             continue
 
-        route = _request_travel_time(previous_location, next_location)
+        # Use the previous task's end as the departure time. For future schedules,
+        # Kakao's future-driving endpoint accounts for the scheduled departure time.
+        route = _request_travel_time(previous_location, next_location, previous.end)
         if not route:
             continue
 

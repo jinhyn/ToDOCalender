@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import axios from 'axios';
+import api from './services/axios';
 import KakaoAuthDisplay from './components/KakaoAuthDisplay';
 import CategoryManager from './components/CategoryManager';
 import CalendarDisplay from './components/CalendarDisplay';
@@ -7,8 +7,18 @@ import TaskPopup from './components/TaskPopup';
 import { useKakaoAuth } from './hooks/useKakaoAuth';
 
 export default function App() {
-  const { user, loginWithKakao, logout, isSdkLoaded: isKakaoAuthSdkLoaded } = useKakaoAuth();
+  const { user, accessToken, loginWithKakao, logout, isSdkLoaded: isKakaoAuthSdkLoaded } = useKakaoAuth();
   const [filterTag, setFilterTag] = useState('전체');
+
+  // 카카오 로그인 토큰을 api 인스턴스의 모든 요청 Authorization 헤더로 실어 보냄.
+  // 백엔드는 이 토큰을 카카오 서버에 검증한 뒤에만 API 접근을 허용합니다.
+  useEffect(() => {
+    if (accessToken) {
+      api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+    } else {
+      delete api.defaults.headers.common['Authorization'];
+    }
+  }, [accessToken]);
   const [showPopup, setShowPopup] = useState(false);
   const [popupInitialData, setPopupInitialData] = useState(null);
   const [apiCategories, setApiCategories] = useState([]);
@@ -19,14 +29,14 @@ export default function App() {
 
   const fetchCategories = useCallback(async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/categories/');
+      const response = await api.get('categories/');
       setApiCategories(response.data);
     } catch (error) { console.error('Categories load failed', error); }
   }, []);
 
   const fetchTasks = useCallback(async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/tasks/');
+      const response = await api.get('tasks/');
       const processedTasks = response.data.map(task => ({
         ...task,
         location: typeof task.location === 'string' ? JSON.parse(task.location) : task.location
@@ -36,15 +46,17 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    // accessToken이 준비되기 전엔 호출해도 401만 나므로, 로그인 완료 후에만 불러옵니다.
+    if (!accessToken) return;
     fetchCategories();
     fetchTasks();
-  }, [fetchCategories, fetchTasks]);
+  }, [fetchCategories, fetchTasks, accessToken]);
 
   // 일정 저장 로직 (수정/생성 통합)
   const handleSaveTask = useCallback(async (taskData) => {
     try {
       const isEdit = !!taskData.id;
-      const url = isEdit ? `http://localhost:8000/api/tasks/${taskData.id}/` : 'http://localhost:8000/api/tasks/';
+      const url = isEdit ? `tasks/${taskData.id}/` : 'tasks/';
       const method = isEdit ? 'put' : 'post';
 
       const payload = {
@@ -53,7 +65,7 @@ export default function App() {
         location: typeof taskData.location === 'object' ? JSON.stringify(taskData.location) : taskData.location
       };
 
-      await axios[method](url, payload);
+      await api[method](url, payload);
       await fetchTasks();
       setShowPopup(false);
     } catch (error) {
@@ -65,11 +77,29 @@ export default function App() {
   const handleDeleteTask = useCallback(async (taskId) => {
     if (!taskId || !window.confirm("정말로 삭제하시겠습니까?")) return;
     try {
-      await axios.delete(`http://localhost:8000/api/tasks/${taskId}/`);
+      await api.delete(`tasks/${taskId}/`);
       await fetchTasks();
       setShowPopup(false);
     } catch (error) { console.error('Delete failed', error); }
   }, [fetchTasks]);
+
+  // 카테고리 드래그 앤 드롭 순서 저장
+  // 화면은 즉시(낙관적으로) 새 순서로 갱신하고, 서버 저장이 실패하면 원래 순서로 되돌립니다.
+  const handleReorderCategories = useCallback(async (orderedIds) => {
+    const previousCategories = apiCategories;
+    const reordered = orderedIds
+      .map((id) => apiCategories.find((c) => c.id === id))
+      .filter(Boolean);
+    setApiCategories(reordered);
+
+    try {
+      await api.post('categories/reorder/', { order: orderedIds });
+    } catch (error) {
+      console.error('Category reorder failed', error);
+      setApiCategories(previousCategories); // 롤백
+      alert('카테고리 순서를 저장하지 못했습니다. 다시 시도해주세요.');
+    }
+  }, [apiCategories]);
 
   if (!isKakaoAuthSdkLoaded) return <div>로딩 중...</div>;
   if (!user) return <KakaoAuthDisplay user={null} loginWithKakao={loginWithKakao} logout={logout} />;
@@ -87,18 +117,19 @@ export default function App() {
           setFilterTag={setFilterTag} 
           currentFilterTag={filterTag} 
           addCategory={async (name, color) => {
-            await axios.post('http://localhost:8000/api/categories/', { name, color });
+            await api.post('categories/', { name, color });
             await fetchCategories();
           }}
           deleteCategory={async (name) => {
             const cat = apiCategories.find(c => c.name === name);
             if (cat) {
-              await axios.delete(`http://localhost:8000/api/categories/${cat.id}/`);
+              await api.delete(`categories/${cat.id}/`);
               await fetchCategories();
               await fetchTasks();
               if (filterTag === name) setFilterTag('전체');
             }
           }}
+          reorderCategories={handleReorderCategories}
         />
         
         <CalendarDisplay

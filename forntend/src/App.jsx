@@ -26,6 +26,7 @@ export default function App() {
     const response = await api.get('tasks/');
     setApiTasks(response.data.map((task) => ({
       ...task,
+      tag: task.category_detail?.name || '일반',
       location: typeof task.location === 'string' ? safeParseLocation(task.location) : task.location,
     })));
   }, [user]);

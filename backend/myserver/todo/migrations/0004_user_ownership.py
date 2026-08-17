@@ -36,13 +36,6 @@ def assign_existing_data_to_legacy_user(apps, schema_editor):
     Task.objects.filter(user__isnull=True).update(user=legacy_user)
 
 
-def reverse_ownership(apps, schema_editor):
-    Category = apps.get_model("todo", "Category")
-    Task = apps.get_model("todo", "Task")
-    Category.objects.all().update(user=None)
-    Task.objects.all().update(user=None)
-
-
 class Migration(migrations.Migration):
     dependencies = [
         ("todo", "0003_category_color_alter_task_category"),
@@ -65,7 +58,7 @@ class Migration(migrations.Migration):
             name="user",
             field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, related_name="tasks", to=settings.AUTH_USER_MODEL),
         ),
-        migrations.RunPython(assign_existing_data_to_legacy_user, reverse_ownership),
+        migrations.RunPython(assign_existing_data_to_legacy_user, migrations.RunPython.noop),
         migrations.AlterField(
             model_name="category",
             name="user",

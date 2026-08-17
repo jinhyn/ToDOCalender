@@ -15,7 +15,13 @@ def assign_existing_data_to_legacy_user(apps, schema_editor):
     legacy_user.set_unusable_password()
     legacy_user.save(update_fields=["password"])
 
-    Category.objects.filter(user__isnull=True).update(user=legacy_user)
+    categories = list(Category.objects.filter(user__isnull=True).order_by("id"))
+    for order, category in enumerate(categories):
+        category.user = legacy_user
+        category.order = order
+    if categories:
+        Category.objects.bulk_update(categories, ["user", "order"])
+
     Task.objects.filter(user__isnull=True).update(user=legacy_user)
 
 
@@ -42,6 +48,11 @@ class Migration(migrations.Migration):
                 related_name="categories",
                 to=settings.AUTH_USER_MODEL,
             ),
+        ),
+        migrations.AddField(
+            model_name="category",
+            name="order",
+            field=models.IntegerField(default=0),
         ),
         migrations.AddField(
             model_name="task",
@@ -71,6 +82,10 @@ class Migration(migrations.Migration):
                 related_name="tasks",
                 to=settings.AUTH_USER_MODEL,
             ),
+        ),
+        migrations.AlterModelOptions(
+            name="category",
+            options={"ordering": ["order", "id"]},
         ),
         migrations.AddConstraint(
             model_name="category",

@@ -85,7 +85,7 @@ ToDOCalender/
 │       │   └── tests.py
 │       └── manage.py
 │
-├── forntend/
+├── frontend/
 │   └── src/
 │       ├── components/
 │       ├── hooks/
@@ -94,8 +94,6 @@ ToDOCalender/
 │
 └── README.md
 ```
-
-> 현재 프론트엔드 디렉터리 이름은 저장소에 있는 `forntend`를 그대로 사용합니다.
 
 ## 실행 방법
 
@@ -139,7 +137,7 @@ API 키는 GitHub에 커밋하지 않는 것을 권장합니다.
 새 터미널에서:
 
 ```powershell
-cd forntend
+cd frontend
 npm install
 npm run dev
 ```

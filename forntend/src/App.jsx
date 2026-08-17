@@ -108,6 +108,18 @@ export default function App() {
     }
   }, [fetchTasks]);
 
+  const handleDeleteCategory = useCallback(async (categoryId, categoryName) => {
+    if (!categoryId) return;
+    if (filterTag === categoryName) setFilterTag('전체');
+    try {
+      await api.delete(`categories/${categoryId}/`);
+      await Promise.all([fetchCategories(), fetchTasks()]);
+    } catch (error) {
+      console.error('Category delete failed', error);
+      alert(`카테고리 삭제에 실패했습니다: ${JSON.stringify(error.response?.data || error.message)}`);
+    }
+  }, [filterTag, fetchCategories, fetchTasks]);
+
   if (!isKakaoAuthSdkLoaded) return <div>로딩 중...</div>;
   if (!user) return <KakaoAuthDisplay user={null} loginWithKakao={loginWithKakao} logout={logout} />;
 
@@ -124,14 +136,7 @@ export default function App() {
           currentFilterTag={filterTag}
           reorderCategories={reorderCategories}
           addCategory={async (name, color) => { await api.post('categories/', { name, color }); await fetchCategories(); }}
-          deleteCategory={async (name) => {
-            const cat = apiCategories.find((c) => c.name === name);
-            if (cat) {
-              await api.delete(`categories/${cat.id}/`);
-              await Promise.all([fetchCategories(), fetchTasks()]);
-              if (filterTag === name) setFilterTag('전체');
-            }
-          }}
+          deleteCategory={handleDeleteCategory}
         />
         <CalendarDisplay
           tasks={apiTasks}

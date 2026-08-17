@@ -16,16 +16,27 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
     setTaskTitle('');
     setStartDateTime(initialData?.defaultDate ? `${initialData.defaultDate}T09:00` : localTime);
     setEndDateTime(initialData?.defaultDate ? `${initialData.defaultDate}T09:30` : localTime);
-    setTag('일반'); setSearchKeyword(''); clearLocation();
+    setTag('일반');
+    setSearchKeyword('');
+    clearLocation();
   }, [initialData, clearLocation]);
 
   useEffect(() => {
     if (!show) return;
+
     if (initialData?.task) {
       const { task } = initialData;
-      setTaskTitle(task.title || ''); setStartDateTime(task.date?.slice(0, 16) || ''); setEndDateTime(task.end?.slice(0, 16) || ''); setTag(task.category_detail?.name || '일반');
-    } else resetForm();
-  }, [show, initialData?.task?.id, resetForm, initialData?.task]);
+      setTaskTitle(task.title || '');
+      setStartDateTime(task.date?.slice(0, 16) || '');
+      setEndDateTime(task.end?.slice(0, 16) || '');
+      setTag(task.category_detail?.name || '일반');
+    } else {
+      resetForm();
+    }
+    // Only initialize/reset the form when the modal opens or the selected task changes.
+    // Including resetForm/clearLocation here can cause controlled text inputs to reset on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show, initialData?.task?.id]);
 
   const handleSubmit = (e) => {
     e?.preventDefault();

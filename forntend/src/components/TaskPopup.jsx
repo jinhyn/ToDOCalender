@@ -16,27 +16,16 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
     setTaskTitle('');
     setStartDateTime(initialData?.defaultDate ? `${initialData.defaultDate}T09:00` : localTime);
     setEndDateTime(initialData?.defaultDate ? `${initialData.defaultDate}T09:30` : localTime);
-    setTag('일반');
-    setSearchKeyword('');
-    clearLocation();
+    setTag('일반'); setSearchKeyword(''); clearLocation();
   }, [initialData, clearLocation]);
 
   useEffect(() => {
     if (!show) return;
-
     if (initialData?.task) {
       const { task } = initialData;
-      setTaskTitle(task.title || '');
-      setStartDateTime(task.date?.slice(0, 16) || '');
-      setEndDateTime(task.end?.slice(0, 16) || '');
-      setTag(task.category_detail?.name || '일반');
-    } else {
-      resetForm();
-    }
-    // Only initialize/reset the form when the modal opens or the selected task changes.
-    // Including resetForm/clearLocation here can cause controlled text inputs to reset on every keystroke.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [show, initialData?.task?.id]);
+      setTaskTitle(task.title || ''); setStartDateTime(task.date?.slice(0, 16) || ''); setEndDateTime(task.end?.slice(0, 16) || ''); setTag(task.category_detail?.name || '일반');
+    } else resetForm();
+  }, [show, initialData?.task?.id, resetForm, initialData?.task]);
 
   const handleSubmit = (e) => {
     e?.preventDefault();
@@ -65,6 +54,11 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
               <div className="datetime-row"><input className="form-input" type="datetime-local" value={startDateTime} onChange={(e) => setStartDateTime(e.target.value)} /><input className="form-input" type="datetime-local" value={endDateTime} onChange={(e) => setEndDateTime(e.target.value)} /></div>
             </div>
             <div className="form-section">
+              <label className="form-label" htmlFor="location-search">위치</label>
+              <div className="selected-location-text">
+                <span className="selected-location-icon">📍</span>
+                <span>{locationName || '선택된 장소가 없습니다.'}</span>
+              </div>
               <label className="form-label" htmlFor="location-search">위치 검색</label>
               <div className="location-search"><input id="location-search" className="form-input" type="text" value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} placeholder="장소를 검색하세요" /><button type="button" onClick={() => searchLocation(searchKeyword)}>검색</button></div>
               <div className="search-results">{searchResults.map((res, i) => <div key={i} className="search-result" onClick={() => handleSearchResultClick(res)}>{res.place_name}</div>)}</div>

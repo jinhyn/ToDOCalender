@@ -48,7 +48,19 @@ export default function CategoryManager({ categories, addCategory, deleteCategor
       <DragDropContext onDragEnd={handleDragEnd}>
         <Droppable droppableId="categories" direction="horizontal">
           {(provided) => (
-            <div {...provided.droppableProps} ref={provided.innerRef} style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '20px' }}>
+            <div
+              {...provided.droppableProps}
+              ref={provided.innerRef}
+              style={{
+                display: 'flex',
+                flexWrap: 'nowrap',
+                gap: '8px',
+                marginBottom: '20px',
+                overflowX: 'auto',
+                overflowY: 'hidden',
+                paddingBottom: '4px',
+              }}
+            >
               {categories.map((cat, index) => (
                 <Draggable key={cat.id || cat.name} draggableId={String(cat.id || cat.name)} index={index}>
                   {(providedD) => (
@@ -64,6 +76,7 @@ export default function CategoryManager({ categories, addCategory, deleteCategor
                         borderRadius: '20px',
                         border: currentFilterTag === cat.name ? '2px solid black' : 'none',
                         cursor: 'pointer',
+                        flex: '0 0 auto',
                         ...providedD.draggableProps.style,
                       }}
                     >

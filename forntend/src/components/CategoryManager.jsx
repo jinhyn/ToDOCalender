@@ -10,56 +10,52 @@ const getContrastingTextColor = (hexColor) => {
   return luminance > 0.5 ? '#000000' : '#ffffff';
 };
 
-export default function CategoryManager({
-  categories,
-  addCategory,
-  deleteCategory,
-  setFilterTag,
-  currentFilterTag
-}) {
+export default function CategoryManager({ categories, addCategory, deleteCategory, reorderCategories, setFilterTag, currentFilterTag }) {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryColor, setNewCategoryColor] = useState('#4A90E2');
 
   const handleAddClick = async () => {
     if (!newCategoryName.trim()) return alert('이름을 입력하세요.');
-    if (categories.some(c => c.name === newCategoryName)) return alert('중복된 이름입니다.');
-    
-    await addCategory(newCategoryName, newCategoryColor);
-    setNewCategoryName('');
+    if (categories.some((c) => c.name === newCategoryName.trim())) return alert('중복된 이름입니다.');
+    try {
+      await addCategory(newCategoryName.trim(), newCategoryColor);
+      setNewCategoryName('');
+    } catch (error) {
+      alert(`카테고리 추가 실패: ${JSON.stringify(error.response?.data || error.message)}`);
+    }
+  };
+
+  const handleDragEnd = async (result) => {
+    if (!result.destination || result.destination.index === result.source.index) return;
+    const reordered = [...categories];
+    const [moved] = reordered.splice(result.source.index, 1);
+    reordered.splice(result.destination.index, 0, moved);
+    try {
+      await reorderCategories(reordered);
+    } catch (error) {
+      alert('카테고리 순서 저장에 실패했습니다.');
+    }
   };
 
   return (
     <>
       <div style={{ marginBottom: '15px', display: 'flex', gap: '10px' }}>
-        <input 
-          type="text" 
-          value={newCategoryName} 
-          onChange={(e) => setNewCategoryName(e.target.value)} 
-          placeholder="새 카테고리"
-          style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-        />
-        <input 
-          type="color" 
-          value={newCategoryColor} 
-          onChange={(e) => setNewCategoryColor(e.target.value)} 
-          style={{ width: '35px', height: '35px', border: 'none', cursor: 'pointer' }}
-        />
-        <button onClick={handleAddClick} style={{ padding: '8px 15px', backgroundColor: '#4CAF50', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-          추가
-        </button>
+        <input type="text" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="새 카테고리" style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
+        <input type="color" value={newCategoryColor} onChange={(e) => setNewCategoryColor(e.target.value)} style={{ width: '35px', height: '35px', border: 'none', cursor: 'pointer' }} />
+        <button onClick={handleAddClick} style={{ padding: '8px 15px', backgroundColor: '#4CAF50', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>추가</button>
       </div>
 
-      <DragDropContext onDragEnd={() => {}}>
+      <DragDropContext onDragEnd={handleDragEnd}>
         <Droppable droppableId="categories" direction="horizontal">
           {(provided) => (
             <div {...provided.droppableProps} ref={provided.innerRef} style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '20px' }}>
               {categories.map((cat, index) => (
-                <Draggable key={cat.id || cat.name} draggableId={String(cat.id || cat.name)} index={index} isDragDisabled={cat.name === '전체'}>
+                <Draggable key={cat.id || cat.name} draggableId={String(cat.id || cat.name)} index={index}>
                   {(providedD) => (
                     <button
                       ref={providedD.innerRef}
                       {...providedD.draggableProps}
-                      {...(cat.name === '전체' ? {} : providedD.dragHandleProps)}
+                      {...providedD.dragHandleProps}
                       onClick={() => setFilterTag(cat.name)}
                       style={{
                         backgroundColor: cat.color || '#eee',
@@ -68,13 +64,11 @@ export default function CategoryManager({
                         borderRadius: '20px',
                         border: currentFilterTag === cat.name ? '2px solid black' : 'none',
                         cursor: 'pointer',
-                        ...providedD.draggableProps.style
+                        ...providedD.draggableProps.style,
                       }}
                     >
                       {cat.name}
-                      {cat.name !== '전체' && (
-                        <span onClick={(e) => { e.stopPropagation(); if(window.confirm('삭제할까요?')) deleteCategory(cat.name); }} style={{ marginLeft: '8px' }}>×</span>
-                      )}
+                      {cat.name !== '전체' && <span onClick={(e) => { e.stopPropagation(); if (window.confirm('삭제할까요?')) deleteCategory(cat.name); }} style={{ marginLeft: '8px' }}>×</span>}
                     </button>
                   )}
                 </Draggable>

@@ -153,7 +153,9 @@ class TravelWarningTests(APITestCase):
         self.assertEqual(len(response.data["warnings"]), 1)
         calculate.assert_called_once()
 
-    def test_travel_warnings_isolated_to_authenticated_user(self):
+    @patch("todo.views.calculate_travel_warnings", return_value=[])
+    def test_travel_warnings_isolated_to_authenticated_user(self, calculate):
+        self._task("내 일정", 0, 30, '{"lat":37.5,"lng":126.9}', "내 위치")
         other = get_user_model().objects.create_user(username="other-travel-user")
         Task.objects.create(
             user=other,
@@ -162,13 +164,16 @@ class TravelWarningTests(APITestCase):
             end=self.base + timedelta(minutes=30),
             location='{"lat":37.5,"lng":126.9}',
         )
-        with patch("todo.views.calculate_travel_warnings", return_value=[]) as calculate:
-            response = self.client.get(reverse("task-travel-warnings"))
+
+        response = self.client.get(reverse("task-travel-warnings"))
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["warnings"], [])
+        calculate.assert_called_once()
         tasks = calculate.call_args.args[0]
-        self.assertTrue(all(task.user_id == self.user.id for task in tasks))
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0].user_id, self.user.id)
+        self.assertEqual(tasks[0].title, "내 일정")
 
     @patch("todo.travel._request_travel_time")
     def test_calculates_warning_when_fastest_travel_time_exceeds_gap(self, request):

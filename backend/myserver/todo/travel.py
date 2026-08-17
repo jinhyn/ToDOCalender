@@ -39,7 +39,9 @@ def _request_travel_time(origin, destination, departure_time=None):
     params = {
         "origin": f'{origin["lng"]},{origin["lat"]}',
         "destination": f'{destination["lng"]},{destination["lat"]}',
-        "priority": "RECOMMEND",
+        # TIME asks Kakao for the fastest route, which matches the v1
+        # "minimum travel time" warning policy.
+        "priority": "TIME",
         "summary": "true",
     }
     if use_future:

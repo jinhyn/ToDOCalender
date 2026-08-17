@@ -4,7 +4,14 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 
-const CalendarDisplay = forwardRef(({ tasks, categories, filterTag, onDateClick, onEventClick, onEventOperation }, ref) => {
+const CalendarDisplay = forwardRef(({
+  tasks,
+  categories,
+  filterTag,
+  onDateClick,
+  onEventClick,
+  onEventOperation,
+}, ref) => {
   const calendarRefInternal = useRef(null);
 
   useImperativeHandle(ref, () => ({
@@ -36,7 +43,6 @@ const CalendarDisplay = forwardRef(({ tasks, categories, filterTag, onDateClick,
 
   const events = filteredTasks.map((t) => {
     const cat = categories.find((c) => c.name === t.tag) || categories.find((c) => c.name === '일반');
-    const locationText = t.locationName || '';
     return {
       title: t.title,
       start: t.date,
@@ -46,7 +52,7 @@ const CalendarDisplay = forwardRef(({ tasks, categories, filterTag, onDateClick,
       borderColor: cat ? cat.color : '#3788d8',
       textColor: cat ? getContrastingTextColor(cat.color) : '#ffffff',
       display: 'block',
-      extendedProps: { originalTask: t, locationText },
+      extendedProps: { originalTask: t, locationName: t.locationName || '' },
     };
   });
 
@@ -57,15 +63,13 @@ const CalendarDisplay = forwardRef(({ tasks, categories, filterTag, onDateClick,
     const isMonthView = eventInfo.view.type === 'dayGridMonth';
     const startTime = formatTime(eventInfo.event.start);
     const endTime = formatTime(eventInfo.event.end);
-    const locationText = eventInfo.event.extendedProps.locationText;
+    const locationName = eventInfo.event.extendedProps.locationName;
 
     return (
       <div className="calendar-event-content">
-        <div className="calendar-event-time">
-          {isMonthView ? `${startTime}${endTime ? ` - ${endTime}` : ''}` : eventInfo.timeText}
-        </div>
+        <b>{isMonthView ? `${startTime}${endTime ? ` - ${endTime}` : ''}` : eventInfo.timeText}</b>
         <div className="calendar-event-title">{eventInfo.event.title}</div>
-        {locationText && <div className="calendar-event-location">📍 {locationText}</div>}
+        {locationName && <div className="calendar-event-location">📍 {locationName}</div>}
       </div>
     );
   };

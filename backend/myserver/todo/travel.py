@@ -48,7 +48,7 @@ def _request_travel_time(origin, destination, departure_time=None):
     if use_future:
         params["departure_time"] = departure_time.astimezone(timezone.get_current_timezone()).strftime("%Y%m%d%H%M")
 
-    logger.info(
+    logger.warning(
         "Travel route request: endpoint=%s departure=%s origin=%s destination=%s",
         "future" if use_future else "current",
         departure_time.isoformat() if departure_time else None,
@@ -77,7 +77,7 @@ def _request_travel_time(origin, destination, departure_time=None):
         if duration is None:
             logger.warning("Kakao directions response has no duration: %s", payload)
             return None
-        logger.info("Travel route result: duration=%ss distance=%sm", duration, distance or 0)
+        logger.warning("Travel route result: duration=%ss distance=%sm", duration, distance or 0)
         return {"duration": int(duration), "distance": int(distance or 0)}
     except HTTPError as exc:
         try:
@@ -98,10 +98,10 @@ def calculate_travel_warnings(tasks):
     """Return warnings for consecutive tasks whose travel estimate exceeds the gap."""
     ordered = sorted(tasks, key=lambda task: (task.date, task.id))
     warnings = []
-    logger.info("Travel warning check: %s tasks", len(ordered))
+    logger.warning("Travel warning check: %s tasks", len(ordered))
 
     for previous, next_task in zip(ordered, ordered[1:]):
-        logger.info(
+        logger.warning(
             "Travel pair: #%s '%s' -> #%s '%s' | end=%s next_start=%s",
             previous.id,
             previous.title,
@@ -111,7 +111,7 @@ def calculate_travel_warnings(tasks):
             next_task.date,
         )
         if not previous.end or not previous.location or not next_task.location:
-            logger.info("Travel pair skipped: missing end/location")
+            logger.warning("Travel pair skipped: missing end/location")
             continue
 
         previous_location = _parse_location(previous.location)
@@ -138,7 +138,7 @@ def calculate_travel_warnings(tasks):
             continue
 
         if previous_location == next_location:
-            logger.info("Travel pair skipped: same location")
+            logger.warning("Travel pair skipped: same location")
             continue
 
         route = _request_travel_time(previous_location, next_location, previous.end)
@@ -146,7 +146,7 @@ def calculate_travel_warnings(tasks):
             continue
 
         deficit = route["duration"] - gap_seconds
-        logger.info("Travel comparison: available=%ss travel=%ss deficit=%ss", gap_seconds, route["duration"], deficit)
+        logger.warning("Travel comparison: available=%ss travel=%ss deficit=%ss", gap_seconds, route["duration"], deficit)
         if deficit > 0:
             warnings.append({
                 "previous_task_id": previous.id,
@@ -162,5 +162,5 @@ def calculate_travel_warnings(tasks):
                 "reason": "travel_time",
             })
 
-    logger.info("Travel warning result: %s warnings", len(warnings))
+    logger.warning("Travel warning result: %s warnings", len(warnings))
     return warnings

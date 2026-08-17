@@ -12,7 +12,8 @@ const getContrastingTextColor = (hexColor) => {
 export default function CategoryManager({ categories, addCategory, deleteCategory, reorderCategories, setFilterTag, currentFilterTag }) {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryColor, setNewCategoryColor] = useState('#4A90E2');
-  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [draggedId, setDraggedId] = useState(null);
+  const [dropTargetId, setDropTargetId] = useState(null);
 
   const handleAddClick = async () => {
     if (!newCategoryName.trim()) return alert('이름을 입력하세요.');
@@ -25,18 +26,34 @@ export default function CategoryManager({ categories, addCategory, deleteCategor
     }
   };
 
-  const handleDragStart = (event, index) => {
-    setDraggedIndex(index);
+  const handleDragStart = (event, categoryId) => {
+    setDraggedId(categoryId);
+    setDropTargetId(null);
     event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', String(index));
+    event.dataTransfer.setData('text/plain', String(categoryId));
   };
 
-  const handleDrop = async (event, destinationIndex) => {
+  const handleDragOver = (event, categoryId) => {
     event.preventDefault();
-    const sourceIndex = Number(event.dataTransfer.getData('text/plain'));
-    setDraggedIndex(null);
+    event.dataTransfer.dropEffect = 'move';
+    if (draggedId !== categoryId) setDropTargetId(categoryId);
+  };
 
-    if (!Number.isInteger(sourceIndex) || sourceIndex === destinationIndex) return;
+  const clearDragState = () => {
+    setDraggedId(null);
+    setDropTargetId(null);
+  };
+
+  const handleDrop = async (event, destinationId) => {
+    event.preventDefault();
+    const sourceId = Number(event.dataTransfer.getData('text/plain'));
+    clearDragState();
+
+    if (!Number.isInteger(sourceId) || sourceId === destinationId) return;
+
+    const sourceIndex = categories.findIndex((category) => category.id === sourceId);
+    const destinationIndex = categories.findIndex((category) => category.id === destinationId);
+    if (sourceIndex < 0 || destinationIndex < 0) return;
 
     const reordered = [...categories];
     const [moved] = reordered.splice(sourceIndex, 1);
@@ -66,23 +83,23 @@ export default function CategoryManager({ categories, addCategory, deleteCategor
           alignItems: 'center',
         }}
       >
-        {categories.map((cat, index) => (
+        {categories.map((cat) => (
           <button
             key={cat.id || cat.name}
             draggable
-            onDragStart={(event) => handleDragStart(event, index)}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => handleDrop(event, index)}
-            onDragEnd={() => setDraggedIndex(null)}
+            onDragStart={(event) => handleDragStart(event, cat.id)}
+            onDragOver={(event) => handleDragOver(event, cat.id)}
+            onDrop={(event) => handleDrop(event, cat.id)}
+            onDragEnd={clearDragState}
             onClick={() => setFilterTag(cat.name)}
             style={{
               backgroundColor: cat.color || '#eee',
               color: getContrastingTextColor(cat.color),
               padding: '8px 16px',
               borderRadius: '20px',
-              border: currentFilterTag === cat.name ? '2px solid black' : 'none',
-              cursor: draggedIndex === index ? 'grabbing' : 'grab',
-              opacity: draggedIndex === index ? 0.6 : 1,
+              border: currentFilterTag === cat.name ? '2px solid black' : (dropTargetId === cat.id ? '2px dashed black' : 'none'),
+              cursor: draggedId === cat.id ? 'grabbing' : 'grab',
+              opacity: draggedId === cat.id ? 0.6 : 1,
             }}
           >
             {cat.name}
@@ -90,7 +107,7 @@ export default function CategoryManager({ categories, addCategory, deleteCategor
               <span
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (window.confirm('삭제할까요?')) deleteCategory(cat.name);
+                  if (window.confirm('삭제할까요?')) deleteCategory(cat.id, cat.name);
                 }}
                 style={{ marginLeft: '8px' }}
               >

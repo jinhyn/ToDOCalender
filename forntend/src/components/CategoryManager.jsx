@@ -18,102 +18,49 @@ export default function CategoryManager({ categories, addCategory, deleteCategor
   const handleAddClick = async () => {
     if (!newCategoryName.trim()) return alert('이름을 입력하세요.');
     if (categories.some((c) => c.name === newCategoryName.trim())) return alert('중복된 이름입니다.');
-    try {
-      await addCategory(newCategoryName.trim(), newCategoryColor);
-      setNewCategoryName('');
-    } catch (error) {
-      alert(`카테고리 추가 실패: ${JSON.stringify(error.response?.data || error.message)}`);
-    }
+    try { await addCategory(newCategoryName.trim(), newCategoryColor); setNewCategoryName(''); }
+    catch (error) { alert(`카테고리 추가 실패: ${JSON.stringify(error.response?.data || error.message)}`); }
   };
 
-  const handleDragStart = (event, categoryId) => {
-    setDraggedId(categoryId);
-    setDropTargetId(null);
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', String(categoryId));
-  };
-
-  const handleDragOver = (event, categoryId) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-    if (draggedId !== categoryId) setDropTargetId(categoryId);
-  };
-
-  const clearDragState = () => {
-    setDraggedId(null);
-    setDropTargetId(null);
-  };
-
+  const handleDragStart = (event, categoryId) => { setDraggedId(categoryId); setDropTargetId(null); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', String(categoryId)); };
+  const handleDragOver = (event, categoryId) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; if (draggedId !== categoryId) setDropTargetId(categoryId); };
+  const clearDragState = () => { setDraggedId(null); setDropTargetId(null); };
   const handleDrop = async (event, destinationId) => {
     event.preventDefault();
     const sourceId = Number(event.dataTransfer.getData('text/plain'));
     clearDragState();
-
     if (!Number.isInteger(sourceId) || sourceId === destinationId) return;
-
     const sourceIndex = categories.findIndex((category) => category.id === sourceId);
     const destinationIndex = categories.findIndex((category) => category.id === destinationId);
     if (sourceIndex < 0 || destinationIndex < 0) return;
-
     const reordered = [...categories];
     const [moved] = reordered.splice(sourceIndex, 1);
     reordered.splice(destinationIndex, 0, moved);
-
-    try {
-      await reorderCategories(reordered);
-    } catch (error) {
-      alert('카테고리 순서 저장에 실패했습니다.');
-    }
+    try { await reorderCategories(reordered); } catch { alert('카테고리 순서 저장에 실패했습니다.'); }
   };
 
   return (
     <>
-      <div style={{ marginBottom: '15px', display: 'flex', gap: '10px' }}>
-        <input type="text" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="새 카테고리" style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
-        <input type="color" value={newCategoryColor} onChange={(e) => setNewCategoryColor(e.target.value)} style={{ width: '35px', height: '35px', border: 'none', cursor: 'pointer' }} />
-        <button onClick={handleAddClick} style={{ padding: '8px 15px', backgroundColor: '#4CAF50', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>추가</button>
+      <div className="category-form">
+        <input type="text" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="새 카테고리 이름" aria-label="새 카테고리 이름" />
+        <input type="color" value={newCategoryColor} onChange={(e) => setNewCategoryColor(e.target.value)} style={{ width: 38, height: 38, border: 0, padding: 0, borderRadius: 9, cursor: 'pointer' }} aria-label="카테고리 색상" />
+        <button className="category-add-button" onClick={handleAddClick}>추가</button>
       </div>
-
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '8px',
-          marginBottom: '20px',
-          alignItems: 'center',
-        }}
-      >
+      <div className="category-bar">
         {categories.map((cat) => (
           <button
             key={cat.id || cat.name}
+            className="category-chip"
             draggable
             onDragStart={(event) => handleDragStart(event, cat.id)}
             onDragOver={(event) => handleDragOver(event, cat.id)}
             onDrop={(event) => handleDrop(event, cat.id)}
             onDragEnd={clearDragState}
             onClick={() => setFilterTag(cat.name)}
-            style={{
-              backgroundColor: cat.color || '#eee',
-              color: getContrastingTextColor(cat.color),
-              padding: '8px 16px',
-              borderRadius: '20px',
-              border: currentFilterTag === cat.name ? '2px solid black' : (dropTargetId === cat.id ? '2px dashed black' : 'none'),
-              cursor: draggedId === cat.id ? 'grabbing' : 'grab',
-              opacity: draggedId === cat.id ? 0.6 : 1,
-            }}
+            style={{ backgroundColor: cat.color || '#eee', color: getContrastingTextColor(cat.color), padding: '8px 14px', borderRadius: 999, border: currentFilterTag === cat.name ? '2px solid #111827' : (dropTargetId === cat.id ? '2px dashed #111827' : '1px solid transparent'), cursor: draggedId === cat.id ? 'grabbing' : 'grab', opacity: draggedId === cat.id ? 0.6 : 1 }}
           >
             {cat.name}
-            {cat.name !== '전체' && (
-              <span
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (window.confirm('삭제할까요?')) deleteCategory(cat.id, cat.name);
-                }}
-                style={{ marginLeft: '8px' }}
-              >
-                ×
-              </span>
-            )}
+            {cat.name !== '전체' && <span className="category-delete" onClick={(e) => { e.stopPropagation(); if (window.confirm('카테고리를 삭제할까요?')) deleteCategory(cat.id, cat.name); }} style={{ marginLeft: 8 }}>×</span>}
           </button>
         ))}
       </div>

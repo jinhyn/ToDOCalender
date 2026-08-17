@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -113,3 +114,57 @@ class UserDataIsolationTests(APITestCase):
         self.assertTrue(Task.objects.filter(pk=self.task_a.id).exists())
         self.task_a.refresh_from_db()
         self.assertIsNone(self.task_a.category_id)
+
+
+class TravelWarningTests(APITestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="travel-user")
+        self.client.force_authenticate(self.user)
+        self.base = timezone.now().replace(second=0, microsecond=0)
+
+    def _task(self, title, start_minutes, end_minutes, location, location_name):
+        return Task.objects.create(
+            user=self.user,
+            title=title,
+            date=self.base + timedelta(minutes=start_minutes),
+            end=self.base + timedelta(minutes=end_minutes),
+            location=location,
+            location_name=location_name,
+        )
+
+    @patch("todo.views.calculate_travel_warnings")
+    def test_travel_warnings_endpoint_returns_calculated_warnings(self, calculate):
+        self._task("첫 일정", 0, 60, '{"lat":37.5,"lng":126.9}', "출발지")
+        self._task("다음 일정", 70, 120, '{"lat":37.6,"lng":127.0}', "목적지")
+        calculate.return_value = [{
+            "previous_task_id": 1,
+            "next_task_id": 2,
+            "available_seconds": 600,
+            "travel_seconds": 1200,
+            "deficit_seconds": 600,
+            "reason": "travel_time",
+        }]
+
+        response = self.client.get(reverse("task-travel-warnings"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["warnings"]), 1)
+        calculate.assert_called_once()
+
+    def test_travel_warnings_isolated_to_authenticated_user(self):
+        other = get_user_model().objects.create_user(username="other-travel-user")
+        Task.objects.create(
+            user=other,
+            title="Other task",
+            date=self.base,
+            end=self.base + timedelta(minutes=30),
+            location='{"lat":37.5,"lng":126.9}',
+        )
+        with patch("todo.views.calculate_travel_warnings", return_value=[]) as calculate:
+            response = self.client.get(reverse("task-travel-warnings"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["warnings"], [])
+        tasks = calculate.call_args.args[0]
+        self.assertTrue(all(task.user_id == self.user.id for task in tasks))

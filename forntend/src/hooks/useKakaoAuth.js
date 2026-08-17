@@ -4,6 +4,7 @@ const KAKAO_APP_KEY = '88dbf074f3edb7e6126477fc5a590fc5'; // 실제 카카오 �
 
 export function useKakaoAuth() {
   const [user, setUser] = useState(null);
+  const [accessToken, setAccessToken] = useState(null);
   const [isSdkLoaded, setIsSdkLoaded] = useState(false);
 
   useEffect(() => {
@@ -41,15 +42,19 @@ export function useKakaoAuth() {
         success: function (response) {
           if (response?.kakao_account?.profile) {
             setUser(response.kakao_account.profile);
+            // 백엔드 API 인증에 사용할 토큰 저장 (Authorization: Bearer <token>)
+            setAccessToken(window.Kakao.Auth.getAccessToken());
           }
         },
         fail: function (error) {
           console.error('Failed to fetch user info', error);
           setUser(null);
+          setAccessToken(null);
         }
       });
     } else {
       setUser(null);
+      setAccessToken(null);
     }
   };
 
@@ -68,11 +73,13 @@ export function useKakaoAuth() {
     if (isSdkLoaded && window.Kakao && window.Kakao.isInitialized() && window.Kakao.Auth.getAccessToken()) {
       window.Kakao.Auth.logout(() => {
         setUser(null);
+        setAccessToken(null);
       });
     } else {
-        setUser(null);
+      setUser(null);
+      setAccessToken(null);
     }
   };
 
-  return { user, loginWithKakao, logout, isSdkLoaded };
+  return { user, accessToken, loginWithKakao, logout, isSdkLoaded };
 }

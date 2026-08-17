@@ -4,6 +4,11 @@ class Category(models.Model):
     name = models.CharField(max_length=100)
     # 카테고리 색상 정보가 프론트엔드에 있다면 추가해주는 것이 좋습니다.
     color = models.CharField(max_length=7, default="#000000") 
+    # 사용자가 드래그로 정렬한 순서를 저장 (작을수록 앞쪽)
+    order = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['order', 'id']
 
     def __str__(self):
         return self.name

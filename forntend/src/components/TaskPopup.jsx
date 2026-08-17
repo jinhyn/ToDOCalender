@@ -40,6 +40,7 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
 
   if (!show) return null;
   const selectOptions = categories.filter((cat) => cat.name !== '전체').map((cat) => ({ value: cat.name, label: cat.name }));
+  const travelWarning = initialData?.travelWarning;
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -52,6 +53,15 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
           <button type="button" className="task-modal-close" onClick={onClose} aria-label="닫기">×</button>
         </div>
         <form onSubmit={handleSubmit}>
+          {travelWarning && (
+            <div className="task-travel-warning">
+              <div className="task-travel-warning-title">⚠️ 이동시간이 부족합니다</div>
+              <div className="task-travel-warning-text">
+                이전 일정 <strong>{travelWarning.previous_title}</strong>에서 이동해야 합니다. 예상 이동시간은 <strong>{formatDuration(travelWarning.travel_seconds)}</strong>이고, 이동 가능한 시간은 <strong>{formatDuration(travelWarning.available_seconds)}</strong>입니다.
+              </div>
+              <div className="task-travel-warning-deficit">약 {formatDuration(travelWarning.deficit_seconds)} 부족</div>
+            </div>
+          )}
           <div className="task-form-grid">
             <div className="form-section">
               <div className="form-section-heading">일정 정보</div>
@@ -79,4 +89,12 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
       </div>
     </div>
   );
+}
+
+function formatDuration(seconds) {
+  const minutes = Math.max(0, Math.ceil((seconds || 0) / 60));
+  if (minutes < 60) return `${minutes}분`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours}시간 ${rest}분` : `${hours}시간`;
 }

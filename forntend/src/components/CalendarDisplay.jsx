@@ -4,14 +4,7 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 
-const CalendarDisplay = forwardRef(({
-  tasks,
-  categories,
-  filterTag,
-  onDateClick,
-  onEventClick,
-  onEventOperation,
-}, ref) => {
+const CalendarDisplay = forwardRef(({ tasks, categories, filterTag, onDateClick, onEventClick, onEventOperation }, ref) => {
   const calendarRefInternal = useRef(null);
 
   useImperativeHandle(ref, () => ({
@@ -25,13 +18,13 @@ const CalendarDisplay = forwardRef(({
       const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
       if (Number.isNaN(date.getTime())) return '';
       return date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
-    } catch (e) {
+    } catch {
       return '';
     }
   };
 
   const getContrastingTextColor = (hexColor) => {
-    if (!hexColor || hexColor.length < 4) return '#ffffff';
+    if (!hexColor || hexColor.length < 7) return '#ffffff';
     const r = parseInt(hexColor.slice(1, 3), 16);
     const g = parseInt(hexColor.slice(3, 5), 16);
     const b = parseInt(hexColor.slice(5, 7), 16);
@@ -40,7 +33,6 @@ const CalendarDisplay = forwardRef(({
   };
 
   const filteredTasks = tasks.filter((t) => (filterTag === '전체' ? true : t.tag === filterTag));
-
   const events = filteredTasks.map((t) => {
     const cat = categories.find((c) => c.name === t.tag) || categories.find((c) => c.name === '일반');
     return {
@@ -48,28 +40,26 @@ const CalendarDisplay = forwardRef(({
       start: t.date,
       end: t.end,
       allDay: false,
-      backgroundColor: cat ? cat.color : '#3788d8',
-      borderColor: cat ? cat.color : '#3788d8',
+      backgroundColor: cat?.color || '#3788d8',
+      borderColor: cat?.color || '#3788d8',
       textColor: cat ? getContrastingTextColor(cat.color) : '#ffffff',
       display: 'block',
       extendedProps: { originalTask: t, locationName: t.locationName || '' },
     };
   });
 
-  const handleEventDrop = (dropInfo) => onEventOperation(dropInfo, 'drop');
-  const handleEventResize = (resizeInfo) => onEventOperation(resizeInfo, 'resize');
-
   const renderEventContent = (eventInfo) => {
     const isMonthView = eventInfo.view.type === 'dayGridMonth';
     const startTime = formatTime(eventInfo.event.start);
     const endTime = formatTime(eventInfo.event.end);
     const locationName = eventInfo.event.extendedProps.locationName;
+    const timeText = isMonthView ? `${startTime}${endTime ? ` - ${endTime}` : ''}` : eventInfo.timeText;
 
     return (
       <div className="calendar-event-content">
-        <b>{isMonthView ? `${startTime}${endTime ? ` - ${endTime}` : ''}` : eventInfo.timeText}</b>
+        <div className="calendar-event-time">{timeText}</div>
         <div className="calendar-event-title">{eventInfo.event.title}</div>
-        {locationName && <div className="calendar-event-location">📍 {locationName}</div>}
+        {locationName && <div className="calendar-event-location"><span aria-hidden="true">📍</span> {locationName}</div>}
       </div>
     );
   };
@@ -87,8 +77,8 @@ const CalendarDisplay = forwardRef(({
       eventClick={onEventClick}
       editable={true}
       selectable={true}
-      eventDrop={handleEventDrop}
-      eventResize={handleEventResize}
+      eventDrop={(info) => onEventOperation(info, 'drop')}
+      eventResize={(info) => onEventOperation(info, 'resize')}
       eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
       eventContent={renderEventContent}
       droppable={true}

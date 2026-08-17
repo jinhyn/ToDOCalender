@@ -41,6 +41,17 @@ CORS_ALLOWED_ORIGINS = [
 # 만약 계속 연결이 안 되면 임시로 아래 주석을 해제하고 시도하세요 (모든 접속 허용)
 # CORS_ALLOW_ALL_ORIGINS = True
 
+# API 인증/권한 설정: 카카오 access token(Authorization: Bearer <token>)이
+# 없거나 유효하지 않으면 모든 /api/ 요청이 401로 거부됩니다.
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'todo.authentication.KakaoTokenAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
+
 ROOT_URLCONF = 'myserver.urls'
 
 TEMPLATES = [

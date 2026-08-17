@@ -19,7 +19,12 @@ export default function App() {
   const fetchTasks = useCallback(async () => {
     if (!user) return;
     const response = await api.get('tasks/');
-    setApiTasks(response.data.map((task) => ({ ...task, tag: task.category_detail?.name || '일반', location: typeof task.location === 'string' ? safeParseLocation(task.location) : task.location })));
+    setApiTasks(response.data.map((task) => ({
+      ...task,
+      tag: task.category_detail?.name || '일반',
+      location: typeof task.location === 'string' ? safeParseLocation(task.location) : task.location,
+      locationName: task.location_name || '',
+    })));
   }, [user]);
 
   useEffect(() => {
@@ -47,7 +52,14 @@ export default function App() {
     try {
       const isEdit = !!taskData.id;
       const url = isEdit ? `tasks/${taskData.id}/` : 'tasks/';
-      const payload = { ...taskData, category: apiCategories.find((c) => c.name === taskData.tag)?.id || null, location: typeof taskData.location === 'object' ? JSON.stringify(taskData.location) : taskData.location };
+      const payload = {
+        title: taskData.title,
+        date: taskData.date,
+        end: taskData.end,
+        category: apiCategories.find((c) => c.name === taskData.tag)?.id || null,
+        location: typeof taskData.location === 'object' ? JSON.stringify(taskData.location) : taskData.location,
+        location_name: taskData.locationName || '',
+      };
       if (isEdit) await api.put(url, payload); else await api.post(url, payload);
       await fetchTasks(); setShowPopup(false);
     } catch (error) { alert(`저장 실패: ${JSON.stringify(error.response?.data || error.message)}`); }

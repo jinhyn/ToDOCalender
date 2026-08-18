@@ -32,6 +32,7 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
     locationName,
     setLocationName,
     searchResults,
+    relatedSearches,
     handleSearchResultClick,
     clearLocation,
   } = useKakaoMap(show, initialData?.task);
@@ -207,25 +208,60 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
 
               <label className="form-label" htmlFor="location-search">다른 장소로 변경</label>
               <div className="location-search">
-                <input id="location-search" className="form-input" type="text" value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} placeholder="새로운 장소를 검색하세요" />
+                <input id="location-search" className="form-input" type="text" value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} placeholder="장소 이름을 입력하세요" autoComplete="off" />
                 <button type="button" className="location-search-button" onClick={() => searchLocation(searchKeyword)}>검색</button>
               </div>
-              <div className="location-search-hint">장소 이름 일부만 입력해도 추천 장소가 나타나요.</div>
+              <div className="location-search-hint">장소 이름을 입력하면 연관 검색어와 장소가 나타나요.</div>
 
-              {searchResults.length > 0 && searchKeyword.trim() !== locationName.trim() && (
-                <div className="location-suggestion-list" role="listbox" aria-label="추천 장소">
-                  <div className="location-suggestion-heading">추천 장소</div>
-                  {searchResults.map((res, i) => (
-                    <button type="button" key={`${res.id || res.place_name}-${i}`} className="location-suggestion-item" onClick={() => { handleSearchResultClick(res); setSearchKeyword(res.place_name); }}>
-                      <span className="location-suggestion-pin">📍</span>
-                      <span className="location-suggestion-content">
-                        <strong>{res.place_name}</strong>
-                        <small>{res.road_address_name || res.address_name}</small>
-                      </span>
-                    </button>
-                  ))}
+              {(relatedSearches.length > 0 || searchResults.length > 0) && searchKeyword.trim() !== locationName.trim() && (
+                <div className="location-search-panel">
+                  {relatedSearches.length > 0 && (
+                    <div className="location-related-section">
+                      <div className="location-suggestion-heading">연관 검색어</div>
+                      {relatedSearches.map((suggestion) => (
+                        <button
+                          type="button"
+                          key={suggestion}
+                          className="location-related-item"
+                          onClick={() => {
+                            setSearchKeyword(suggestion);
+                            searchLocation(suggestion);
+                          }}
+                        >
+                          <span className="location-related-icon" aria-hidden="true">⌕</span>
+                          <span>{suggestion}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {searchResults.length > 0 && (
+                    <div className="location-results-section">
+                      <div className="location-suggestion-heading">장소</div>
+                      <div className="location-suggestion-list" role="listbox" aria-label="검색된 장소">
+                        {searchResults.map((res, i) => (
+                          <button
+                            type="button"
+                            key={`${res.id || res.place_name}-${i}`}
+                            className="location-suggestion-item"
+                            onClick={() => {
+                              handleSearchResultClick(res);
+                              setSearchKeyword(res.place_name);
+                            }}
+                          >
+                            <span className="location-suggestion-pin">📍</span>
+                            <span className="location-suggestion-content">
+                              <strong>{res.place_name}</strong>
+                              <small>{res.road_address_name || res.address_name}</small>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
+
               <div ref={mapRef} className="task-map" />
             </div>
           </div>

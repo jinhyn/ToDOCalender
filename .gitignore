@@ -1,6 +1,8 @@
 backend/venv/
 backend/myserver/.venv/
+backend/myserver/staticfiles/
 frontend/node_modules/
+frontend/dist/
 **/__pycache__/
 *.pyc
 db.sqlite3

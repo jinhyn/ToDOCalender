@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Select from 'react-select';
 import { useKakaoMap } from '../hooks/useKakaoMap';
+import './LocationSuggestions.css';
 
 const TIME_OPTIONS = Array.from({ length: 24 * 4 }, (_, index) => {
   const hour = String(Math.floor(index / 4)).padStart(2, '0');
@@ -122,12 +123,7 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
     .map((cat) => ({ value: cat.name, label: cat.name }));
 
   return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
+    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="task-modal" role="dialog" aria-modal="true" aria-labelledby="task-modal-title">
         <div className="task-modal-header">
           <div>
@@ -192,9 +188,7 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
                 </div>
                 <div className="schedule-quick-actions">
                   {[30, 60, 90].map((minutes) => (
-                    <button key={minutes} type="button" onClick={() => applyDuration(minutes, startDate, startTime, setEndDate, setEndTime)}>
-                      {minutes}분
-                    </button>
+                    <button key={minutes} type="button" onClick={() => applyDuration(minutes, startDate, startTime, setEndDate, setEndTime)}>{minutes}분</button>
                   ))}
                 </div>
               </div>
@@ -206,14 +200,7 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
                 <div className="selected-location-edit-label">선택한 장소</div>
                 <div className="location-name-edit-row">
                   <span className="selected-location-icon">📍</span>
-                  <input
-                    className="form-input location-name-input"
-                    type="text"
-                    value={locationName}
-                    onChange={(e) => setLocationName(e.target.value)}
-                    placeholder="장소 이름"
-                    aria-label="선택한 장소 이름"
-                  />
+                  <input className="form-input location-name-input" type="text" value={locationName} onChange={(e) => setLocationName(e.target.value)} placeholder="장소 이름" aria-label="선택한 장소 이름" />
                 </div>
                 <div className="location-edit-hint">장소 이름만 바꾸고 싶다면 여기서 일부 단어를 수정하세요. 지도 위치는 그대로 유지됩니다.</div>
               </div>
@@ -223,22 +210,15 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
                 <input id="location-search" className="form-input" type="text" value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} placeholder="새로운 장소를 검색하세요" />
                 <button type="button" className="location-search-button" onClick={() => searchLocation(searchKeyword)}>검색</button>
               </div>
+              <div className="location-search-hint">장소 이름 일부만 입력해도 추천 장소가 나타나요.</div>
 
               {searchResults.length > 0 && searchKeyword.trim() !== locationName.trim() && (
-                <div className="search-results" role="listbox" aria-label="추천 장소">
-                  <div className="search-results-label">추천 장소</div>
+                <div className="location-suggestion-list" role="listbox" aria-label="추천 장소">
+                  <div className="location-suggestion-heading">추천 장소</div>
                   {searchResults.map((res, i) => (
-                    <button
-                      type="button"
-                      key={`${res.id || res.place_name}-${i}`}
-                      className="search-result"
-                      onClick={() => {
-                        handleSearchResultClick(res);
-                        setSearchKeyword(res.place_name);
-                      }}
-                    >
-                      <span className="search-result-icon">📍</span>
-                      <span className="search-result-content">
+                    <button type="button" key={`${res.id || res.place_name}-${i}`} className="location-suggestion-item" onClick={() => { handleSearchResultClick(res); setSearchKeyword(res.place_name); }}>
+                      <span className="location-suggestion-pin">📍</span>
+                      <span className="location-suggestion-content">
                         <strong>{res.place_name}</strong>
                         <small>{res.road_address_name || res.address_name}</small>
                       </span>

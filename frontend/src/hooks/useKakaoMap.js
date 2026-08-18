@@ -100,6 +100,22 @@ export function useKakaoMap(popupVisible, initialTaskData) {
     }
   }, [popupVisible, isMapSdkLoaded, currentSelectedLocation, initializeMap]);
 
+  const searchLocationSuggestions = useCallback((keyword) => {
+    if (!isMapSdkLoaded || !window.kakao?.maps?.services || !keyword.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    const ps = new window.kakao.maps.services.Places();
+    ps.keywordSearch(keyword.trim(), (data, status) => {
+      if (status === window.kakao.maps.services.Status.OK) {
+        setSearchResults(data.slice(0, 8));
+      } else {
+        setSearchResults([]);
+      }
+    });
+  }, [isMapSdkLoaded]);
+
   const searchLocation = useCallback((keyword) => {
     if (!isMapSdkLoaded || !mapInstanceRef.current || !keyword.trim()) {
       alert('지도가 준비되지 않았거나 검색어가 없습니다.');
@@ -109,7 +125,7 @@ export function useKakaoMap(popupVisible, initialTaskData) {
     const ps = new window.kakao.maps.services.Places();
     ps.keywordSearch(keyword, (data, status) => {
       if (status === window.kakao.maps.services.Status.OK) {
-        setSearchResults(data);
+        setSearchResults(data.slice(0, 8));
         const firstResult = data[0];
         const locPosition = new window.kakao.maps.LatLng(firstResult.y, firstResult.x);
         mapInstanceRef.current.setCenter(locPosition);
@@ -128,6 +144,7 @@ export function useKakaoMap(popupVisible, initialTaskData) {
         setCurrentLocationName(firstResult.place_name);
       } else if (status === window.kakao.maps.services.Status.ZERO_RESULT) {
         alert('검색 결과가 존재하지 않습니다.');
+        setSearchResults([]);
         setCurrentSelectedLocation(null);
         setCurrentLocationName('');
         if (markerInstanceRef.current) markerInstanceRef.current.setMap(null);
@@ -155,6 +172,7 @@ export function useKakaoMap(popupVisible, initialTaskData) {
 
     setCurrentSelectedLocation({ lat: parseFloat(result.y), lng: parseFloat(result.x) });
     setCurrentLocationName(result.place_name);
+    setSearchResults([]);
   }, []);
 
   const clearLocation = useCallback(() => {
@@ -171,6 +189,7 @@ export function useKakaoMap(popupVisible, initialTaskData) {
   return {
     mapRef,
     searchLocation,
+    searchLocationSuggestions,
     selectedLocation: currentSelectedLocation,
     locationName: currentLocationName,
     searchResults,

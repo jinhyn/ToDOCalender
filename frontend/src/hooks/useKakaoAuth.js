@@ -1,12 +1,17 @@
 import { useState, useEffect } from 'react';
 
-const KAKAO_APP_KEY = '88dbf074f3edb7e6126477fc5a590fc5'; // 실제 카카오 앱 키로 변경하세요
+const KAKAO_APP_KEY = import.meta.env.VITE_KAKAO_APP_KEY;
 
 export function useKakaoAuth() {
   const [user, setUser] = useState(null);
   const [isSdkLoaded, setIsSdkLoaded] = useState(false);
 
   useEffect(() => {
+    if (!KAKAO_APP_KEY) {
+      console.error('VITE_KAKAO_APP_KEY가 설정되지 않았습니다.');
+      return;
+    }
+
     if (document.getElementById('kakao-sdk')) {
       if (window.Kakao && !window.Kakao.isInitialized()) {
         window.Kakao.init(KAKAO_APP_KEY);
@@ -28,10 +33,6 @@ export function useKakaoAuth() {
       checkLoginStatus();
     };
     document.body.appendChild(script);
-
-    return () => {
-      // 컴포넌트 언마운트 시 스크립트 태그는 일반적으로 제거하지 않지만, 필요시 로직 추가 가능
-    };
   }, []);
 
   const checkLoginStatus = () => {
@@ -46,7 +47,7 @@ export function useKakaoAuth() {
         fail: function (error) {
           console.error('Failed to fetch user info', error);
           setUser(null);
-        }
+        },
       });
     } else {
       setUser(null);
@@ -70,7 +71,7 @@ export function useKakaoAuth() {
         setUser(null);
       });
     } else {
-        setUser(null);
+      setUser(null);
     }
   };
 

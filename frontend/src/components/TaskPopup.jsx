@@ -26,6 +26,7 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
   const {
     mapRef,
     searchLocation,
+    searchLocationSuggestions,
     selectedLocation,
     locationName,
     setLocationName,
@@ -76,6 +77,16 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
     setSearchKeyword('');
     clearLocation();
   }, [show, taskId, taskDate, taskEnd, taskTitleValue, taskCategory, defaultDate, clearLocation]);
+
+  useEffect(() => {
+    if (!show || !searchKeyword.trim() || searchKeyword.trim() === locationName.trim()) return;
+
+    const timer = window.setTimeout(() => {
+      searchLocationSuggestions(searchKeyword);
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [show, searchKeyword, locationName, searchLocationSuggestions]);
 
   useEffect(() => {
     if (show && taskId !== null) setSearchKeyword(locationName || '');
@@ -213,10 +224,25 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
                 <button type="button" className="location-search-button" onClick={() => searchLocation(searchKeyword)}>검색</button>
               </div>
 
-              {searchResults.length > 0 && (
-                <div className="search-results">
+              {searchResults.length > 0 && searchKeyword.trim() !== locationName.trim() && (
+                <div className="search-results" role="listbox" aria-label="추천 장소">
+                  <div className="search-results-label">추천 장소</div>
                   {searchResults.map((res, i) => (
-                    <div key={i} className="search-result" onClick={() => handleSearchResultClick(res)}>{res.place_name}</div>
+                    <button
+                      type="button"
+                      key={`${res.id || res.place_name}-${i}`}
+                      className="search-result"
+                      onClick={() => {
+                        handleSearchResultClick(res);
+                        setSearchKeyword(res.place_name);
+                      }}
+                    >
+                      <span className="search-result-icon">📍</span>
+                      <span className="search-result-content">
+                        <strong>{res.place_name}</strong>
+                        <small>{res.road_address_name || res.address_name}</small>
+                      </span>
+                    </button>
                   ))}
                 </div>
               )}

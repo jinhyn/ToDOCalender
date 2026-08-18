@@ -3,19 +3,18 @@ import React from 'react';
 export default function KakaoAuthDisplay({ user, loginWithKakao, logout }) {
   if (!user) {
     return (
-      <div style={{ textAlign: 'center', marginTop: '20px', marginBottom: '20px' }}>
-        <h2>To-Do Calendar</h2>
-        <button onClick={loginWithKakao} style={{ padding: '10px 20px', fontSize: '16px', cursor: 'pointer' }}>
-          카카오 로그인
-        </button>
+      <div className="auth-login-card">
+        <div className="auth-login-copy"><span>TO DO CALENDAR</span><strong>오늘의 일정을 한눈에</strong></div>
+        <button className="auth-login-button" onClick={loginWithKakao}>카카오로 시작하기</button>
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-      <span>👤 {user.nickname}님</span>
-      <button onClick={logout} style={{ padding: '5px 10px', cursor: 'pointer' }}>로그아웃</button>
+    <div className="auth-user">
+      <span className="auth-user-badge">●</span>
+      <span className="auth-user-name">{user.nickname}님</span>
+      <button className="auth-logout-button" onClick={logout}>로그아웃</button>
     </div>
   );
 }

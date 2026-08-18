@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-const KAKAO_MAP_APP_KEY = '88dbf074f3edb7e6126477fc5a590fc5';
+const KAKAO_MAP_APP_KEY = import.meta.env.VITE_KAKAO_APP_KEY;
 
 export function useKakaoMap(popupVisible, initialTaskData) {
   const mapRef = useRef(null);
@@ -28,6 +28,11 @@ export function useKakaoMap(popupVisible, initialTaskData) {
   }, [initialLat, initialLng, initialLocationName]);
 
   useEffect(() => {
+    if (!KAKAO_MAP_APP_KEY) {
+      console.error('VITE_KAKAO_APP_KEY가 설정되지 않았습니다.');
+      return;
+    }
+
     if (document.getElementById('kakao-map-sdk')) {
       if (window.kakao && window.kakao.maps) {
         window.kakao.maps.load(() => setIsMapSdkLoaded(true));

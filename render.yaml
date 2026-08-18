@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: todo-calendar-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt && python backend/myserver/manage.py collectstatic --no-input && python backend/myserver/manage.py migrate
+    startCommand: gunicorn --chdir backend/myserver myserver.wsgi:application
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: todo-calendar-api.onrender.com
+      - key: DATABASE_URL
+        fromDatabase:
+          name: todo-calendar-db
+          property: connectionString
+      - key: DATABASE_SSL_REQUIRE
+        value: "true"
+      - key: KAKAO_REST_API_KEY
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: CSRF_TRUSTED_ORIGINS
+        sync: false
+
+databases:
+  - name: todo-calendar-db
+    plan: free

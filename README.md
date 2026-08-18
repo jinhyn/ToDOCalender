@@ -115,10 +115,11 @@ Task와 Category에 사용자를 연결하고 API의 QuerySet을 현재 로그�
 | --- | --- |
 | Frontend | React, Vite, FullCalendar, Axios |
 | Backend | Python, Django, Django REST Framework |
-| Database | Django ORM 기반 DB |
+| Database | Django ORM 기반 DB / PostgreSQL 배포 준비 |
 | 인증 | Kakao Login |
 | 지도 / 장소 검색 | Kakao Maps API |
 | 길찾기 | Kakao Mobility API |
+| 배포 | Vercel / Render 예정 |
 | 개발 환경 | VS Code, Git, npm, virtualenv |
 
 ## 프로젝트 구조
@@ -126,6 +127,8 @@ Task와 Category에 사용자를 연결하고 API의 QuerySet을 현재 로그�
 ```text
 ToDOCalender/
 ├── backend/
+│   ├── requirements.txt
+│   ├── .env.example
 │   └── myserver/
 │       ├── todo/
 │       │   ├── models.py
@@ -136,12 +139,14 @@ ToDOCalender/
 │       └── manage.py
 │
 ├── frontend/
+│   ├── .env.example
 │   └── src/
 │       ├── components/
 │       ├── hooks/
 │       ├── services/
 │       └── App.jsx
 │
+├── render.yaml
 └── README.md
 ```
 
@@ -160,31 +165,28 @@ cd ToDOCalender
 cd backend\myserver
 python -m venv .venv
 .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r ..\requirements.txt
 python manage.py migrate
 python manage.py runserver
 ```
 
-### 3. Kakao Mobility API 설정
+### 3. Backend 환경변수
 
-이동시간 기능을 사용하려면 Kakao Mobility REST API 키가 필요합니다.
+`backend/.env.example`을 참고해 환경변수를 설정합니다.
 
-REST API 키는 프론트엔드 코드에 넣지 않고 Django에서 환경변수로 사용합니다.
-
-PowerShell:
+PowerShell 예시:
 
 ```powershell
+$env:DJANGO_SECRET_KEY="개발용-비밀키"
+$env:DJANGO_DEBUG="True"
+$env:DJANGO_ALLOWED_HOSTS="localhost,127.0.0.1"
+$env:CORS_ALLOWED_ORIGINS="http://localhost:5173"
 $env:KAKAO_REST_API_KEY="발급받은_REST_API_키"
-python manage.py runserver
 ```
-
-Kakao Maps에서 사용하는 JavaScript 키와 이동시간 계산에 사용하는 REST API 키는 서로 다른 용도입니다.
-
-API 키는 GitHub에 커밋하지 않는 것을 권장합니다.
 
 ### 4. Frontend
 
-새 터미널에서:
+`frontend/.env.example`을 참고해 환경변수를 설정합니다.
 
 ```powershell
 cd frontend
@@ -192,7 +194,53 @@ npm install
 npm run dev
 ```
 
+예시:
+
+```text
+VITE_API_BASE_URL=http://localhost:8000/api/
+VITE_KAKAO_APP_KEY=발급받은_카카오_JavaScript_키
+```
+
 개발 서버가 실행되면 Vite가 안내하는 `localhost` 주소로 접속합니다.
+
+API Key는 GitHub에 커밋하지 않는 것을 권장합니다.
+
+## 배포
+
+배포 환경은 다음 구조를 기준으로 준비했습니다.
+
+```text
+Frontend
+  Vercel
+    ↓
+Backend
+  Render
+    ↓
+PostgreSQL
+```
+
+### Backend
+
+`render.yaml`을 이용해 Render에서 Django Web Service와 PostgreSQL을 구성할 수 있도록 했습니다.
+
+배포 시 다음 환경변수가 필요합니다.
+
+- `DJANGO_SECRET_KEY`
+- `DJANGO_DEBUG=False`
+- `DJANGO_ALLOWED_HOSTS`
+- `DATABASE_URL`
+- `KAKAO_REST_API_KEY`
+- `CORS_ALLOWED_ORIGINS`
+- `CSRF_TRUSTED_ORIGINS`
+
+### Frontend
+
+Vercel에서 `frontend` 디렉터리를 프로젝트 루트로 사용하고 다음 환경변수를 설정합니다.
+
+- `VITE_API_BASE_URL`: 배포된 Django API 주소
+- `VITE_KAKAO_APP_KEY`: Kakao JavaScript 앱 키
+
+배포 후에는 Kakao Developers에서 실제 Vercel 도메인을 허용된 도메인 및 로그인 Redirect URI에 추가해야 합니다.
 
 ## 데이터 구조
 
@@ -252,16 +300,16 @@ Pull Request와 `main`, `fix/**` 브랜치에 Push가 발생하면 자동으로 
 
 현재 기본적인 캘린더 기능과 장소 저장, 카테고리 관리, 사용자별 데이터 분리, 이동시간 경고 기능까지 구현되어 있습니다.
 
-백엔드 테스트 13개가 통과하고 있으며, Frontend production build와 GitHub Actions CI도 구성되어 있습니다.
+백엔드 테스트 13개가 통과하고 있으며, Frontend production build와 GitHub Actions CI도 구성되어 있습니다. 현재 `feature/deployment` 브랜치에서 Render/Vercel 배포를 위한 환경변수, PostgreSQL, production 설정을 준비하고 있습니다.
 
 ## 앞으로 추가해볼 기능
 
+- 실제 서비스 배포 및 운영 환경 테스트
 - 이동수단 선택
 - 일정 사이 여유시간 설정
 - 이동시간 상세 정보 및 경로 확인
 - 이동시간 부족 알림
 - 이동시간 결과 캐싱을 통한 API 호출 감소
-- 배포 환경 구성
 
 ## 참고
 

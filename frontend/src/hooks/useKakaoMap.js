@@ -11,7 +11,6 @@ export function useKakaoMap(popupVisible, initialTaskData) {
   const [currentSelectedLocation, setCurrentSelectedLocation] = useState(null);
   const [currentLocationName, setCurrentLocationName] = useState('');
   const [searchResults, setSearchResults] = useState([]);
-  const [relatedSearches, setRelatedSearches] = useState([]);
 
   const initialLocation = initialTaskData?.location;
   const initialLocationName = initialTaskData?.locationName || '';
@@ -101,29 +100,9 @@ export function useKakaoMap(popupVisible, initialTaskData) {
     }
   }, [popupVisible, isMapSdkLoaded, currentSelectedLocation, initializeMap]);
 
-  const buildRelatedSearches = useCallback((keyword, data) => {
-    const normalizedKeyword = keyword.trim().toLowerCase();
-    if (!normalizedKeyword) return [];
-
-    const seen = new Set();
-    return data
-      .map((item) => item.place_name?.trim())
-      .filter(Boolean)
-      .filter((name) => name.toLowerCase().startsWith(normalizedKeyword))
-      .filter((name) => name.toLowerCase() !== normalizedKeyword)
-      .filter((name) => {
-        const key = name.toLowerCase();
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .slice(0, 5);
-  }, []);
-
   const searchLocationSuggestions = useCallback((keyword) => {
     if (!isMapSdkLoaded || !window.kakao?.maps?.services || !keyword.trim()) {
       setSearchResults([]);
-      setRelatedSearches([]);
       return;
     }
 
@@ -131,13 +110,11 @@ export function useKakaoMap(popupVisible, initialTaskData) {
     ps.keywordSearch(keyword.trim(), (data, status) => {
       if (status === window.kakao.maps.services.Status.OK) {
         setSearchResults(data.slice(0, 8));
-        setRelatedSearches(buildRelatedSearches(keyword, data));
       } else {
         setSearchResults([]);
-        setRelatedSearches([]);
       }
     });
-  }, [isMapSdkLoaded, buildRelatedSearches]);
+  }, [isMapSdkLoaded]);
 
   const searchLocation = useCallback((keyword) => {
     if (!isMapSdkLoaded || !mapInstanceRef.current || !keyword.trim()) {
@@ -149,7 +126,6 @@ export function useKakaoMap(popupVisible, initialTaskData) {
     ps.keywordSearch(keyword.trim(), (data, status) => {
       if (status === window.kakao.maps.services.Status.OK) {
         setSearchResults(data.slice(0, 8));
-        setRelatedSearches(buildRelatedSearches(keyword, data));
         const firstResult = data[0];
         const locPosition = new window.kakao.maps.LatLng(firstResult.y, firstResult.x);
         mapInstanceRef.current.setCenter(locPosition);
@@ -169,7 +145,6 @@ export function useKakaoMap(popupVisible, initialTaskData) {
       } else if (status === window.kakao.maps.services.Status.ZERO_RESULT) {
         alert('검색 결과가 존재하지 않습니다.');
         setSearchResults([]);
-        setRelatedSearches([]);
         setCurrentSelectedLocation(null);
         setCurrentLocationName('');
         if (markerInstanceRef.current) markerInstanceRef.current.setMap(null);
@@ -177,7 +152,7 @@ export function useKakaoMap(popupVisible, initialTaskData) {
         alert('위치 검색 중 오류가 발생했습니다.');
       }
     });
-  }, [isMapSdkLoaded, buildRelatedSearches]);
+  }, [isMapSdkLoaded]);
 
   const handleSearchResultClick = useCallback((result) => {
     if (!mapInstanceRef.current) return;
@@ -198,14 +173,12 @@ export function useKakaoMap(popupVisible, initialTaskData) {
     setCurrentSelectedLocation({ lat: parseFloat(result.y), lng: parseFloat(result.x) });
     setCurrentLocationName(result.place_name);
     setSearchResults([]);
-    setRelatedSearches([]);
   }, []);
 
   const clearLocation = useCallback(() => {
     setCurrentSelectedLocation(null);
     setCurrentLocationName('');
     setSearchResults([]);
-    setRelatedSearches([]);
 
     if (markerInstanceRef.current) markerInstanceRef.current.setMap(null);
     if (mapInstanceRef.current && window.kakao?.maps) {
@@ -220,7 +193,6 @@ export function useKakaoMap(popupVisible, initialTaskData) {
     selectedLocation: currentSelectedLocation,
     locationName: currentLocationName,
     searchResults,
-    relatedSearches,
     setSelectedLocation: setCurrentSelectedLocation,
     setLocationName: setCurrentLocationName,
     clearLocation,

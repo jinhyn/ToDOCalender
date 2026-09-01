@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Select from 'react-select';
 import { useKakaoMap } from '../hooks/useKakaoMap';
 import './LocationSuggestions.css';
+import './ScheduleTime.css';
 
 const TIME_OPTIONS = Array.from({ length: 24 * 4 }, (_, index) => {
   const hour = String(Math.floor(index / 4)).padStart(2, '0');

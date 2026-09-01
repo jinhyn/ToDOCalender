@@ -48,13 +48,7 @@ def _request_travel_time(origin, destination, departure_time=None):
     if use_future:
         params["departure_time"] = departure_time.astimezone(timezone.get_current_timezone()).strftime("%Y%m%d%H%M")
 
-    logger.warning(
-        "Travel route request: endpoint=%s departure=%s origin=%s destination=%s",
-        "future" if use_future else "current",
-        departure_time.isoformat() if departure_time else None,
-        origin,
-        destination,
-    )
+    logger.info("Travel route request: endpoint=%s", "future" if use_future else "current")
 
     request = Request(
         f"{url}?{urlencode(params)}",
@@ -69,22 +63,17 @@ def _request_travel_time(origin, destination, departure_time=None):
             payload = json.loads(response.read().decode("utf-8"))
         routes = payload.get("routes") or []
         if not routes:
-            logger.warning("Kakao directions returned no routes: %s", payload)
+            logger.warning("Kakao directions returned no routes")
             return None
         summary = routes[0].get("summary", {})
         duration = summary.get("duration")
         distance = summary.get("distance")
         if duration is None:
-            logger.warning("Kakao directions response has no duration: %s", payload)
+            logger.warning("Kakao directions response has no duration")
             return None
-        logger.warning("Travel route result: duration=%ss distance=%sm", duration, distance or 0)
         return {"duration": int(duration), "distance": int(distance or 0)}
     except HTTPError as exc:
-        try:
-            body = exc.read().decode("utf-8", errors="replace")
-        except Exception:
-            body = ""
-        logger.error("Kakao directions HTTP %s: %s", exc.code, body[:1000])
+        logger.error("Kakao directions HTTP %s", exc.code)
         return None
     except (URLError, TimeoutError) as exc:
         logger.error("Kakao directions network error: %s", exc)
@@ -94,41 +83,44 @@ def _request_travel_time(origin, destination, departure_time=None):
         return None
 
 
+def _warning_base(previous, next_task):
+    return {
+        "previous_task_id": previous.id,
+        "next_task_id": next_task.id,
+        "previous_title": previous.title,
+        "next_title": next_task.title,
+        "previous_location_name": previous.location_name or "이전 일정 위치",
+        "next_location_name": next_task.location_name or "다음 일정 위치",
+        "previous_end": previous.end.isoformat() if previous.end else None,
+        "next_start": next_task.date.isoformat(),
+    }
+
+
 def calculate_travel_warnings(tasks):
-    """Return warnings for consecutive tasks whose travel estimate exceeds the gap."""
+    """Return warnings only for upcoming consecutive tasks whose travel estimate exceeds the gap."""
     ordered = sorted(tasks, key=lambda task: (task.date, task.id))
     warnings = []
-    logger.warning("Travel warning check: %s tasks", len(ordered))
+    now = timezone.now()
+    logger.info("Travel warning check: %s tasks", len(ordered))
 
     for previous, next_task in zip(ordered, ordered[1:]):
-        logger.warning(
-            "Travel pair: #%s '%s' -> #%s '%s' | end=%s next_start=%s",
-            previous.id,
-            previous.title,
-            next_task.id,
-            next_task.title,
-            previous.end,
-            next_task.date,
-        )
+        # Once the next schedule has already started, the warning can no longer help the user.
+        if next_task.date <= now:
+            continue
+
         if not previous.end or not previous.location or not next_task.location:
-            logger.warning("Travel pair skipped: missing end/location")
             continue
 
         previous_location = _parse_location(previous.location)
         next_location = _parse_location(next_task.location)
         if not previous_location or not next_location:
-            logger.warning("Travel pair skipped: invalid location data")
             continue
 
         gap_seconds = int((next_task.date - previous.end).total_seconds())
+        warning_base = _warning_base(previous, next_task)
         if gap_seconds < 0:
             warnings.append({
-                "previous_task_id": previous.id,
-                "next_task_id": next_task.id,
-                "previous_title": previous.title,
-                "next_title": next_task.title,
-                "previous_location_name": previous.location_name or "이전 일정 위치",
-                "next_location_name": next_task.location_name or "다음 일정 위치",
+                **warning_base,
                 "available_seconds": gap_seconds,
                 "travel_seconds": 0,
                 "distance_meters": 0,
@@ -138,7 +130,6 @@ def calculate_travel_warnings(tasks):
             continue
 
         if previous_location == next_location:
-            logger.warning("Travel pair skipped: same location")
             continue
 
         route = _request_travel_time(previous_location, next_location, previous.end)
@@ -146,15 +137,9 @@ def calculate_travel_warnings(tasks):
             continue
 
         deficit = route["duration"] - gap_seconds
-        logger.warning("Travel comparison: available=%ss travel=%ss deficit=%ss", gap_seconds, route["duration"], deficit)
         if deficit > 0:
             warnings.append({
-                "previous_task_id": previous.id,
-                "next_task_id": next_task.id,
-                "previous_title": previous.title,
-                "next_title": next_task.title,
-                "previous_location_name": previous.location_name or "이전 일정 위치",
-                "next_location_name": next_task.location_name or "다음 일정 위치",
+                **warning_base,
                 "available_seconds": gap_seconds,
                 "travel_seconds": route["duration"],
                 "distance_meters": route["distance"],
@@ -162,5 +147,5 @@ def calculate_travel_warnings(tasks):
                 "reason": "travel_time",
             })
 
-    logger.warning("Travel warning result: %s warnings", len(warnings))
+    logger.info("Travel warning result: %s warnings", len(warnings))
     return warnings

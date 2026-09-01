@@ -1,18 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
+import './CategoryManager.css';
 
 const CATEGORY_COLORS = [
-  '#BFDBFE', // blue
-  '#C7D2FE', // indigo
-  '#DDD6FE', // violet
-  '#FBCFE8', // pink
-  '#FECACA', // red
-  '#FED7AA', // orange
-  '#FEF3C7', // amber
-  '#D9F99D', // lime
-  '#BBF7D0', // green
-  '#CCFBF1', // teal
-  '#CFFAFE', // cyan
-  '#E2E8F0', // slate
+  '#BFDBFE', '#C7D2FE', '#DDD6FE', '#FBCFE8', '#FECACA', '#FED7AA',
+  '#FEF3C7', '#D9F99D', '#BBF7D0', '#CCFBF1', '#CFFAFE', '#E2E8F0',
 ];
 
 const getContrastingTextColor = (hexColor) => {
@@ -24,12 +15,23 @@ const getContrastingTextColor = (hexColor) => {
   return luminance > 0.5 ? '#1f2937' : '#ffffff';
 };
 
-export default function CategoryManager({ categories, addCategory, deleteCategory, reorderCategories, setFilterTag, currentFilterTag }) {
+export default function CategoryManager({
+  categories,
+  addCategory,
+  updateCategory,
+  deleteCategory,
+  reorderCategories,
+  setFilterTag,
+  currentFilterTag,
+}) {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryColor, setNewCategoryColor] = useState(CATEGORY_COLORS[0]);
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [draggedId, setDraggedId] = useState(null);
   const [dropTargetId, setDropTargetId] = useState(null);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editColor, setEditColor] = useState(CATEGORY_COLORS[0]);
   const colorPickerRef = useRef(null);
 
   useEffect(() => {
@@ -42,20 +44,44 @@ export default function CategoryManager({ categories, addCategory, deleteCategor
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
-  const handleColorSelect = (color) => {
-    setNewCategoryColor(color);
-    setIsColorPickerOpen(false);
-  };
-
   const handleAddClick = async () => {
-    if (!newCategoryName.trim()) return alert('이름을 입력하세요.');
-    if (categories.some((c) => c.name === newCategoryName.trim())) return alert('중복된 이름입니다.');
+    const name = newCategoryName.trim();
+    if (!name) return alert('이름을 입력하세요.');
+    if (categories.some((category) => category.name === name)) return alert('중복된 이름입니다.');
     try {
-      await addCategory(newCategoryName.trim(), newCategoryColor);
+      await addCategory(name, newCategoryColor);
       setNewCategoryName('');
       setNewCategoryColor(CATEGORY_COLORS[0]);
     } catch (error) {
       alert(`카테고리 추가 실패: ${JSON.stringify(error.response?.data || error.message)}`);
+    }
+  };
+
+  const openEdit = (category) => {
+    setEditingCategory(category);
+    setEditName(category.name);
+    setEditColor(category.color || CATEGORY_COLORS[0]);
+  };
+
+  const closeEdit = () => {
+    setEditingCategory(null);
+    setEditName('');
+    setEditColor(CATEGORY_COLORS[0]);
+  };
+
+  const handleEditSave = async () => {
+    if (!editingCategory) return;
+    const name = editName.trim();
+    if (!name) return alert('카테고리 이름을 입력하세요.');
+    if (categories.some((category) => category.id !== editingCategory.id && category.name === name)) {
+      return alert('중복된 이름입니다.');
+    }
+
+    try {
+      await updateCategory(editingCategory.id, { name, color: editColor }, editingCategory.name);
+      closeEdit();
+    } catch (error) {
+      alert(`카테고리 수정 실패: ${JSON.stringify(error.response?.data || error.message)}`);
     }
   };
 
@@ -99,9 +125,11 @@ export default function CategoryManager({ categories, addCategory, deleteCategor
     <>
       <div className="category-form">
         <input
+          className="category-name-input"
           type="text"
           value={newCategoryName}
           onChange={(e) => setNewCategoryName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleAddClick(); }}
           placeholder="새 카테고리 이름"
           aria-label="새 카테고리 이름"
         />
@@ -113,7 +141,6 @@ export default function CategoryManager({ categories, addCategory, deleteCategor
             onClick={() => setIsColorPickerOpen((open) => !open)}
             aria-label="카테고리 색상 선택"
             aria-expanded={isColorPickerOpen}
-            title="카테고리 색상 선택"
           >
             <span className="category-color-preview" style={{ backgroundColor: newCategoryColor }} />
             <span className="category-color-trigger-label">색상</span>
@@ -130,7 +157,7 @@ export default function CategoryManager({ categories, addCategory, deleteCategor
                     type="button"
                     className={`category-color-option${newCategoryColor === color ? ' selected' : ''}`}
                     style={{ backgroundColor: color }}
-                    onClick={() => handleColorSelect(color)}
+                    onClick={() => { setNewCategoryColor(color); setIsColorPickerOpen(false); }}
                     aria-label={`${color} 색상`}
                     aria-pressed={newCategoryColor === color}
                   >
@@ -143,15 +170,16 @@ export default function CategoryManager({ categories, addCategory, deleteCategor
           )}
         </div>
 
-        <button className="category-add-button" onClick={handleAddClick}>추가</button>
+        <button type="button" className="category-add-button" onClick={handleAddClick}>추가</button>
       </div>
 
       <div className="category-bar">
         {categories.map((cat) => (
           <button
             key={cat.id || cat.name}
+            type="button"
             className="category-chip"
-            draggable
+            draggable={cat.name !== '전체'}
             onDragStart={(event) => handleDragStart(event, cat.id)}
             onDragOver={(event) => handleDragOver(event, cat.id)}
             onDrop={(event) => handleDrop(event, cat.id)}
@@ -160,29 +188,89 @@ export default function CategoryManager({ categories, addCategory, deleteCategor
             style={{
               backgroundColor: cat.color || '#eee',
               color: getContrastingTextColor(cat.color),
-              padding: '8px 14px',
+              padding: '8px 12px',
               borderRadius: 999,
               border: currentFilterTag === cat.name ? '2px solid #111827' : (dropTargetId === cat.id ? '2px dashed #111827' : '1px solid transparent'),
-              cursor: draggedId === cat.id ? 'grabbing' : 'grab',
+              cursor: cat.name === '전체' ? 'pointer' : (draggedId === cat.id ? 'grabbing' : 'grab'),
               opacity: draggedId === cat.id ? 0.6 : 1,
             }}
           >
-            {cat.name}
+            <span>{cat.name}</span>
             {cat.name !== '전체' && (
               <span
-                className="category-delete"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (window.confirm('카테고리를 삭제할까요?')) deleteCategory(cat.id, cat.name);
+                className="category-edit-trigger"
+                role="button"
+                tabIndex={0}
+                aria-label={`${cat.name} 카테고리 편집`}
+                onClick={(e) => { e.stopPropagation(); openEdit(cat); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openEdit(cat);
+                  }
                 }}
-                style={{ marginLeft: 8 }}
               >
-                ×
+                ⋯
               </span>
             )}
           </button>
         ))}
       </div>
+
+      {editingCategory && (
+        <div className="category-edit-card" aria-label={`${editingCategory.name} 카테고리 수정`}>
+          <div className="category-edit-header">
+            <div>
+              <strong>카테고리 수정</strong>
+              <span>이름과 색상을 바꿀 수 있어요.</span>
+            </div>
+            <button type="button" className="category-edit-close" onClick={closeEdit} aria-label="카테고리 수정 닫기">×</button>
+          </div>
+
+          <input
+            className="category-name-input"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleEditSave(); }}
+            aria-label="수정할 카테고리 이름"
+          />
+
+          <div className="category-edit-colors" aria-label="카테고리 색상">
+            {CATEGORY_COLORS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                className={`category-edit-color${editColor === color ? ' selected' : ''}`}
+                style={{ backgroundColor: color }}
+                onClick={() => setEditColor(color)}
+                aria-label={`${color} 색상`}
+                aria-pressed={editColor === color}
+              >
+                {editColor === color && <span aria-hidden="true">✓</span>}
+              </button>
+            ))}
+          </div>
+
+          <div className="category-edit-actions">
+            <button
+              type="button"
+              className="category-edit-delete"
+              onClick={async () => {
+                if (!window.confirm(`'${editingCategory.name}' 카테고리를 삭제할까요?`)) return;
+                await deleteCategory(editingCategory.id, editingCategory.name);
+                closeEdit();
+              }}
+            >
+              삭제
+            </button>
+            <div>
+              <button type="button" className="category-edit-cancel" onClick={closeEdit}>취소</button>
+              <button type="button" className="category-edit-save" onClick={handleEditSave}>저장</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

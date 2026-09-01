@@ -53,7 +53,7 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
       setTaskTitle(taskTitleValue);
       setStartDate(start.date);
       setStartTime(start.time || '09:00');
-      setEndDate(end.date);
+      setEndDate(end.date || start.date);
       setEndTime(end.time || '09:30');
       setTag(taskCategory);
       setSearchKeyword('');
@@ -72,7 +72,7 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
     setTaskTitle('');
     setStartDate(start.date);
     setStartTime(start.time);
-    setEndDate(end.date);
+    setEndDate(end.date || start.date);
     setEndTime(end.time);
     setTag('일반');
     setSearchKeyword('');
@@ -165,25 +165,24 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
                 <span className="form-help">15분 단위로 선택할 수 있어요</span>
               </div>
               <div className="schedule-time-card">
+                <div className="schedule-selected-date">
+                  <span className="schedule-selected-date-icon" aria-hidden="true">▣</span>
+                  <strong>{formatScheduleDateRange(startDate, endDate)}</strong>
+                  <span>{taskId !== null ? '날짜 변경은 캘린더에서 일정을 이동해주세요.' : '선택한 날짜'}</span>
+                </div>
                 <div className="schedule-time-row">
                   <div>
                     <span className="schedule-time-label">시작</span>
-                    <div className="schedule-time-controls">
-                      <input className="form-input schedule-date-input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} aria-label="시작 날짜" />
-                      <select className="form-input schedule-time-select" value={startTime} onChange={(e) => setStartTime(e.target.value)} aria-label="시작 시간">
-                        {TIME_OPTIONS.map((time) => <option key={time} value={time}>{time}</option>)}
-                      </select>
-                    </div>
+                    <select className="form-input schedule-time-select" value={startTime} onChange={(e) => setStartTime(e.target.value)} aria-label="시작 시간">
+                      {TIME_OPTIONS.map((time) => <option key={time} value={time}>{time}</option>)}
+                    </select>
                   </div>
                   <span className="schedule-arrow" aria-hidden="true">→</span>
                   <div>
                     <span className="schedule-time-label">종료</span>
-                    <div className="schedule-time-controls">
-                      <input className="form-input schedule-date-input" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} aria-label="종료 날짜" />
-                      <select className="form-input schedule-time-select" value={endTime} onChange={(e) => setEndTime(e.target.value)} aria-label="종료 시간">
-                        {TIME_OPTIONS.map((time) => <option key={time} value={time}>{time}</option>)}
-                      </select>
-                    </div>
+                    <select className="form-input schedule-time-select" value={endTime} onChange={(e) => setEndTime(e.target.value)} aria-label="종료 시간">
+                      {TIME_OPTIONS.map((time) => <option key={time} value={time}>{time}</option>)}
+                    </select>
                   </div>
                 </div>
                 <div className="schedule-quick-actions">
@@ -264,6 +263,19 @@ function applyDuration(minutes, startDate, startTime, setEndDate, setEndTime) {
   const [date, time] = local.split('T');
   setEndDate(date);
   setEndTime(time);
+}
+
+function formatScheduleDateRange(startDate, endDate) {
+  if (!startDate) return '날짜 미지정';
+  const startText = formatScheduleDate(startDate);
+  if (!endDate || endDate === startDate) return startText;
+  return `${startText} → ${formatScheduleDate(endDate)}`;
+}
+
+function formatScheduleDate(value) {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
 }
 
 function formatDuration(seconds) {

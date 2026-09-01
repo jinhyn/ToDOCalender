@@ -59,22 +59,11 @@ class TaskViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="travel-warnings")
     def travel_warnings(self, request):
         tasks = list(self.get_queryset().order_by("date", "id"))
-        logger.warning("Travel warning check: %d tasks", len(tasks))
-        for task in tasks:
-            logger.warning(
-                "Travel task #%s: title=%r date=%s end=%s location=%r location_name=%r",
-                task.id,
-                task.title,
-                task.date,
-                task.end,
-                task.location,
-                task.location_name,
-            )
+        logger.info("Travel warning check: task_count=%d", len(tasks))
 
         if len(tasks) < 2:
-            logger.warning("Travel warning result: skipped because fewer than 2 tasks")
             return Response({"warnings": []})
 
         warnings = calculate_travel_warnings(tasks)
-        logger.warning("Travel warning result: %d warnings", len(warnings))
+        logger.info("Travel warning result: warning_count=%d", len(warnings))
         return Response({"warnings": warnings})

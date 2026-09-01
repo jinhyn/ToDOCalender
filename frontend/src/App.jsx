@@ -56,6 +56,11 @@ export default function App() {
     if (!categoryId) return; if (filterTag === categoryName) setFilterTag('전체');
     try { await api.delete(`categories/${categoryId}/`); await Promise.all([fetchCategories(), fetchTasks()]); } catch (error) { console.error('Category delete failed', error); alert(`카테고리 삭제에 실패했습니다: ${JSON.stringify(error.response?.data || error.message)}`); }
   }, [filterTag, fetchCategories, fetchTasks]);
+  const handleUpdateCategory = useCallback(async (categoryId, values, previousName) => {
+    const response = await api.patch(`categories/${categoryId}/`, values);
+    if (filterTag === previousName && response.data?.name) setFilterTag(response.data.name);
+    await Promise.all([fetchCategories(), fetchTasks()]);
+  }, [filterTag, fetchCategories, fetchTasks]);
 
   const warningByNextTaskId = useMemo(() => Object.fromEntries(travelWarnings.map((warning) => [warning.next_task_id, warning])), [travelWarnings]);
   if (!isKakaoAuthSdkLoaded) return <div className="app-loading"><div className="loading-orb">✓</div><span>캘린더를 준비하고 있어요...</span></div>;
@@ -69,8 +74,8 @@ export default function App() {
       </div></header>
       <main className="app-main">
         <section className="welcome-strip"><div><span className="welcome-kicker">오늘의 계획</span><h2>차근차근, 하나씩 해볼까요?</h2><p>일정을 정리하고 이동 시간까지 미리 확인해보세요.</p></div><div className="welcome-sun" aria-hidden="true">✦</div></section>
-        <section className="category-section"><div className="section-heading"><div><h2>카테고리</h2><p>드래그해서 순서를 바꿀 수 있어요</p></div><span className="section-badge">MY LIST</span></div>
-          <CategoryManager categories={memoizedCategories} setFilterTag={setFilterTag} currentFilterTag={filterTag} reorderCategories={reorderCategories} addCategory={async (name, color) => { await api.post('categories/', { name, color }); await fetchCategories(); }} deleteCategory={handleDeleteCategory} />
+        <section className="category-section"><div className="section-heading"><div><h2>카테고리</h2><p>드래그해서 순서를 바꾸고, ⋯ 버튼에서 이름과 색상을 수정할 수 있어요</p></div><span className="section-badge">MY LIST</span></div>
+          <CategoryManager categories={memoizedCategories} setFilterTag={setFilterTag} currentFilterTag={filterTag} reorderCategories={reorderCategories} addCategory={async (name, color) => { await api.post('categories/', { name, color }); await fetchCategories(); }} updateCategory={handleUpdateCategory} deleteCategory={handleDeleteCategory} />
         </section>
         {travelWarnings.length > 0 && <section className="travel-warning-panel" aria-label="이동시간 경고"><div className="travel-warning-heading"><span className="travel-warning-icon">!</span><div><strong>이동시간을 조금 확인해주세요</strong><div className="travel-warning-subtitle">다음 일정까지 이동할 시간이 충분하지 않은 일정이 있어요.</div></div></div><div className="travel-warning-list">{travelWarnings.slice(0, 3).map((warning) => <div className="travel-warning-item" key={`${warning.previous_task_id}-${warning.next_task_id}`}><div><strong>{warning.previous_title}</strong><span className="warning-arrow">→</span><strong>{warning.next_title}</strong></div>{warning.reason === 'overlap' ? <span>일정 시간이 겹칩니다.</span> : <span>이동 예상 {formatDuration(warning.travel_seconds)} · 이동 가능 {formatDuration(warning.available_seconds)} · <b>{formatDuration(warning.deficit_seconds)} 부족</b></span>}</div>)}</div></section>}
         <section className="calendar-card"><CalendarDisplay tasks={apiTasks} categories={memoizedCategories} filterTag={filterTag} travelWarnings={warningByNextTaskId}

@@ -49,6 +49,12 @@ The project is reviewed from multiple product perspectives before major features
   - Removed production warning logs containing schedule title, date, coordinate and location-name values.
   - Travel-warning logs now keep only aggregate task/warning counts.
 
+- **Loading, failure and first-use states**
+  - Added a visible initial-loading state for backend cold starts and normal data fetches.
+  - Added a retry action when task/category loading fails.
+  - Added a first-user empty state with a direct "add first schedule" action.
+  - Prevents API failures from looking like a legitimate empty calendar.
+
 ### Existing reliability foundations
 
 - Kakao authentication with server-side authenticated user mapping.
@@ -64,34 +70,33 @@ The project is reviewed from multiple product perspectives before major features
 
 ### P0 — before external user testing
 
-1. **Initial data loading / failure UI**
-   - Visible loading state while the backend wakes or data is fetched.
-   - Retry action when schedule/category loading fails.
-   - Avoid leaving the user with an unexplained empty calendar after an API failure.
-
-2. **Regression verification for category editing**
+1. **Regression verification for category editing**
    - Rename a category currently used by tasks.
    - Change only color.
    - Rename the active filter.
    - Reject duplicate names.
    - Delete an edited category and verify tasks remain unlinked rather than deleted.
 
-3. **Mobile interaction QA**
+2. **Mobile interaction QA**
    - Calendar toolbar and event readability.
    - Schedule modal scrolling.
    - Location-result scrolling and map interaction.
    - Category edit panel and drag interactions.
+   - Loading/error/empty states on narrow screens.
 
-4. **Failure-path QA for external APIs**
+3. **Failure-path QA for external APIs**
    - Kakao Maps SDK unavailable.
    - Kakao Mobility timeout / quota / API failure.
-   - Render cold-start delay.
+   - Render cold-start delay and retry path.
+
+4. **Automated front-end coverage**
+   - Add tests for critical user flows that currently depend on manual verification.
+   - Prioritize category editing, loading/error states and schedule form validation.
 
 ### P1 — after initial QA
 
 - Improve task save/delete feedback without relying only on browser alerts/confirm dialogs.
 - Improve time-entry behavior so changing a start time can optionally preserve the event duration.
-- Add empty states for first-time users.
 - Add lightweight client-side analytics events for schedule creation and travel-warning interaction.
 
 ### HOLD until user validation
@@ -142,4 +147,5 @@ This project demonstrates more than CRUD implementation:
 - Optimized external routing calls by skipping same-location pairs.
 - Iterated UI after observing that search suggestions and place results created unnecessary duplication.
 - Treated logs containing schedule/location information as a privacy concern before external release.
+- Added explicit loading/failure/empty states so production infrastructure behavior is visible to users rather than mistaken for missing data.
 - Introduced product, UX, QA, security and business review criteria before continuing feature expansion.

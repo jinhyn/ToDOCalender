@@ -15,6 +15,7 @@ export default function App() {
   const [popupInitialData, setPopupInitialData] = useState(null);
   const [apiCategories, setApiCategories] = useState([]);
   const [apiTasks, setApiTasks] = useState([]);
+  const [travelPlans, setTravelPlans] = useState([]);
   const [travelWarnings, setTravelWarnings] = useState([]);
   const [isInitialLoading, setIsInitialLoading] = useState(false);
   const [initialLoadError, setInitialLoadError] = useState('');
@@ -28,10 +29,17 @@ export default function App() {
     const response = await api.get('tasks/');
     setApiTasks(response.data.map((task) => ({ ...task, tag: task.category_detail?.name || '일반', location: typeof task.location === 'string' ? safeParseLocation(task.location) : task.location, locationName: task.location_name || '' })));
   }, [user]);
-  const fetchTravelWarnings = useCallback(async () => {
+  const fetchTravelData = useCallback(async () => {
     if (!user) return;
-    try { const response = await api.get('tasks/travel-warnings/'); setTravelWarnings(response.data?.warnings || []); }
-    catch (error) { console.warn('Travel warning check failed', error); setTravelWarnings([]); }
+    try {
+      const response = await api.get('tasks/travel-warnings/');
+      setTravelPlans(response.data?.plans || []);
+      setTravelWarnings(response.data?.warnings || []);
+    } catch (error) {
+      console.warn('Travel plan check failed', error);
+      setTravelPlans([]);
+      setTravelWarnings([]);
+    }
   }, [user]);
   const loadInitialData = useCallback(async () => {
     if (!user) return;
@@ -50,6 +58,7 @@ export default function App() {
     if (!user) {
       setApiCategories([]);
       setApiTasks([]);
+      setTravelPlans([]);
       setTravelWarnings([]);
       setFilterTag('전체');
       setSearchQuery('');
@@ -59,25 +68,31 @@ export default function App() {
     }
     loadInitialData();
   }, [user, loadInitialData]);
-  useEffect(() => { if (user && apiTasks.length >= 2) fetchTravelWarnings(); else setTravelWarnings([]); }, [user, apiTasks, fetchTravelWarnings]);
+  useEffect(() => {
+    if (user && apiTasks.length >= 2) fetchTravelData();
+    else {
+      setTravelPlans([]);
+      setTravelWarnings([]);
+    }
+  }, [user, apiTasks, fetchTravelData]);
 
   useEffect(() => {
     if (!notificationsEnabled || typeof Notification === 'undefined' || Notification.permission !== 'granted') return undefined;
     const now = Date.now();
-    const timers = travelWarnings
-      .filter((warning) => warning.reason === 'travel_time' && warning.recommended_departure_at)
-      .map((warning) => {
-        const delay = new Date(warning.recommended_departure_at).getTime() - now;
+    const timers = travelPlans
+      .filter((plan) => plan.reason === 'travel_time' && plan.recommended_departure_at)
+      .map((plan) => {
+        const delay = new Date(plan.recommended_departure_at).getTime() - now;
         if (delay <= 0 || delay > 24 * 60 * 60 * 1000) return null;
         return window.setTimeout(() => {
           new Notification('이제 출발할 시간이에요', {
-            body: `${warning.next_title}까지 이동하려면 지금 출발하는 것이 좋아요.`,
+            body: `${plan.next_title}까지 약 ${formatDuration(plan.travel_seconds)} 걸려요. 지금 출발하는 것이 좋아요.`,
           });
         }, delay);
       })
       .filter(Boolean);
     return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [notificationsEnabled, travelWarnings]);
+  }, [notificationsEnabled, travelPlans]);
 
   const reorderCategories = useCallback(async (categories) => {
     const previous = apiCategories; setApiCategories(categories);
@@ -96,9 +111,14 @@ export default function App() {
       const payload = { title: taskData.title, date: taskData.date, end: taskData.end, category: apiCategories.find((c) => c.name === taskData.tag)?.id || null, location: typeof taskData.location === 'object' ? JSON.stringify(taskData.location) : taskData.location, location_name: taskData.locationName || '' };
       if (isEdit) {
         await api.put(`tasks/${taskData.id}/`, payload);
+      } else if (taskData.recurrenceType && taskData.recurrenceType !== 'none') {
+        await api.post('tasks/recurring/', {
+          task: payload,
+          recurrence_type: taskData.recurrenceType,
+          recurrence_count: taskData.recurrenceCount,
+        });
       } else {
-        const payloads = buildRecurringPayloads(payload, taskData.recurrenceType, taskData.recurrenceCount);
-        await Promise.all(payloads.map((item) => api.post('tasks/', item)));
+        await api.post('tasks/', payload);
       }
       await fetchTasks();
       setShowPopup(false);
@@ -153,7 +173,7 @@ export default function App() {
 
         {!isInitialLoading && !initialLoadError && (
           <>
-            <ProductDashboard tasks={apiTasks} warnings={travelWarnings} searchQuery={searchQuery} onSearchChange={setSearchQuery} notificationsEnabled={notificationsEnabled} onToggleNotifications={toggleNotifications} />
+            <ProductDashboard tasks={apiTasks} plans={travelPlans} warnings={travelWarnings} searchQuery={searchQuery} onSearchChange={setSearchQuery} notificationsEnabled={notificationsEnabled} onToggleNotifications={toggleNotifications} />
             <section className="category-section"><div className="section-heading"><div><h2>카테고리</h2><p>드래그해서 순서를 바꾸고, ⋯ 버튼에서 이름과 색상을 수정할 수 있어요</p></div><span className="section-badge">MY LIST</span></div>
               <CategoryManager categories={memoizedCategories} setFilterTag={setFilterTag} currentFilterTag={filterTag} reorderCategories={reorderCategories} addCategory={async (name, color) => { await api.post('categories/', { name, color }); await fetchCategories(); }} updateCategory={handleUpdateCategory} deleteCategory={handleDeleteCategory} />
             </section>
@@ -171,27 +191,6 @@ export default function App() {
   );
 }
 
-function buildRecurringPayloads(payload, recurrenceType = 'none', recurrenceCount = 1) {
-  const count = recurrenceType === 'none' ? 1 : Math.min(30, Math.max(1, Number(recurrenceCount) || 1));
-  return Array.from({ length: count }, (_, index) => {
-    if (index === 0) return payload;
-    return { ...payload, date: shiftRecurringDate(payload.date, recurrenceType, index), end: payload.end ? shiftRecurringDate(payload.end, recurrenceType, index) : null };
-  });
-}
-function shiftRecurringDate(value, type, index) {
-  const date = new Date(value);
-  if (type === 'daily') date.setDate(date.getDate() + index);
-  if (type === 'weekly') date.setDate(date.getDate() + index * 7);
-  if (type === 'monthly') {
-    const originalDay = date.getDate();
-    date.setDate(1);
-    date.setMonth(date.getMonth() + index);
-    const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-    date.setDate(Math.min(originalDay, lastDay));
-  }
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 16);
-}
 function formatDuration(seconds) { const minutes = Math.max(0, Math.ceil((seconds || 0) / 60)); if (minutes < 60) return `${minutes}분`; const hours = Math.floor(minutes / 60); const rest = minutes % 60; return rest ? `${hours}시간 ${rest}분` : `${hours}시간`; }
 function formatScheduleDate(value) { if (!value) return ''; const date = new Date(value); if (Number.isNaN(date.getTime())) return ''; return date.toLocaleString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }); }
 function safeParseLocation(value) { try { return JSON.parse(value); } catch { return value; } }

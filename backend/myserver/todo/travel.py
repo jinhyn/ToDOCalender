@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import timedelta
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -137,7 +138,7 @@ def calculate_travel_warnings(tasks):
 
         deficit = route["duration"] - gap_seconds
         if deficit > 0:
-            recommended_departure_at = next_task.date - timezone.timedelta(seconds=route["duration"])
+            recommended_departure_at = next_task.date - timedelta(seconds=route["duration"])
             warnings.append({
                 **warning_base,
                 "available_seconds": gap_seconds,

@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import api from '../services/axios';
 import './ProductDashboard.css';
 
-export default function ProductDashboard({ tasks, warnings, searchQuery, onSearchChange, notificationsEnabled, onToggleNotifications, onRefresh, onDeleteAccount }) {
+export default function ProductDashboard({ tasks, plans = [], warnings, searchQuery, onSearchChange, notificationsEnabled, onToggleNotifications, onRefresh, onDeleteAccount }) {
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef(null);
   const today = localDateKey(new Date());
@@ -12,6 +12,9 @@ export default function ProductDashboard({ tasks, warnings, searchQuery, onSearc
   const now = new Date();
   const nextTask = todayTasks.find((task) => new Date(task.date) > now);
   const upcomingWarnings = warnings.filter((warning) => new Date(warning.next_start) > now);
+  const nextDeparture = plans
+    .filter((plan) => plan.reason === 'travel_time' && plan.recommended_departure_at && new Date(plan.recommended_departure_at) > now)
+    .sort((a, b) => new Date(a.recommended_departure_at) - new Date(b.recommended_departure_at))[0];
 
   const importCalendar = async (event) => {
     const file = event.target.files?.[0];
@@ -22,12 +25,13 @@ export default function ProductDashboard({ tasks, warnings, searchQuery, onSearc
       const text = await file.text();
       const events = parseIcs(text).slice(0, 100);
       if (!events.length) throw new Error('가져올 일정을 찾지 못했습니다.');
-      await Promise.all(events.map((item) => api.post('tasks/', item)));
+      await api.post('tasks/bulk/', { tasks: events });
       if (onRefresh) await onRefresh();
       alert(`${events.length}개의 일정을 가져왔습니다. 장소 좌표가 없는 일정은 필요할 때 장소를 다시 선택해주세요.`);
       if (!onRefresh) window.location.reload();
     } catch (error) {
-      alert(error.message || '캘린더 파일을 가져오지 못했습니다.');
+      const detail = error.response?.data?.errors || error.response?.data?.tasks;
+      alert(detail ? `가져오기 실패: ${JSON.stringify(detail)}` : (error.message || '캘린더 파일을 가져오지 못했습니다.'));
     } finally {
       setIsImporting(false);
     }
@@ -61,10 +65,15 @@ export default function ProductDashboard({ tasks, warnings, searchQuery, onSearc
     <section className="product-dashboard" aria-label="오늘 일정 요약">
       <div className="product-dashboard-summary">
         <div><span className="product-dashboard-label">오늘 일정</span><strong>{todayTasks.length}개</strong></div>
-        <div><span className="product-dashboard-label">이동 확인</span><strong>{upcomingWarnings.length}개</strong></div>
+        <div><span className="product-dashboard-label">이동 경고</span><strong>{upcomingWarnings.length}개</strong></div>
         <div className="product-dashboard-next">
           <span className="product-dashboard-label">다음 일정</span>
           <strong>{nextTask ? `${formatTime(nextTask.date)} ${nextTask.title}` : '오늘 예정 없음'}</strong>
+        </div>
+        <div className="product-dashboard-departure">
+          <span className="product-dashboard-label">다음 권장 출발</span>
+          <strong>{nextDeparture ? `${formatDateTime(nextDeparture.recommended_departure_at)} · ${nextDeparture.next_title}` : '예정 없음'}</strong>
+          {nextDeparture && <small>예상 이동 {formatDuration(nextDeparture.travel_seconds)}</small>}
         </div>
       </div>
       <div className="product-dashboard-tools">
@@ -82,7 +91,7 @@ export default function ProductDashboard({ tasks, warnings, searchQuery, onSearc
         <button type="button" className="data-delete-action" onClick={deleteAccountData}>내 앱 데이터 삭제</button>
         <input ref={fileInputRef} type="file" accept=".ics,text/calendar" hidden onChange={importCalendar} />
       </div>
-      <p className="product-dashboard-note">출발 알림은 현재 웹앱을 열어둔 동안 권장 출발 시각에 브라우저 알림으로 알려드려요. Google·Apple·Outlook 캘린더는 ICS 파일로 가져오거나 내보낼 수 있어요.</p>
+      <p className="product-dashboard-note">권장 출발은 앞으로 7일 안의 연속 일정 중 장소가 다른 경우 계산해요. 출발 알림은 현재 웹앱을 열어둔 동안 권장 출발 시각에 브라우저 알림으로 알려드려요. Google·Apple·Outlook 캘린더는 ICS 파일로 가져오거나 내보낼 수 있어요.</p>
     </section>
   );
 }
@@ -97,6 +106,20 @@ function formatTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function formatDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function formatDuration(seconds) {
+  const minutes = Math.max(0, Math.ceil((seconds || 0) / 60));
+  if (minutes < 60) return `${minutes}분`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours}시간 ${rest}분` : `${hours}시간`;
 }
 
 function exportIcs(tasks) {

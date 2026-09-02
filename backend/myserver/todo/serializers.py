@@ -33,6 +33,7 @@ class TaskSerializer(serializers.ModelSerializer):
         queryset=Category.objects.none(), allow_null=True, required=False
     )
     category_detail = CategorySerializer(source="category", read_only=True)
+    location = serializers.JSONField(required=False, allow_null=True)
 
     class Meta:
         model = Task
@@ -53,13 +54,35 @@ class TaskSerializer(serializers.ModelSerializer):
         return attrs
 
     def validate_location(self, value):
-        if isinstance(value, dict):
-            return json.dumps(value, ensure_ascii=False)
-        return value
+        if value in (None, ""):
+            return None
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                raise serializers.ValidationError("location must contain lat and lng coordinates.") from exc
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("location must contain lat and lng coordinates.")
+        try:
+            lat = float(value["lat"])
+            lng = float(value["lng"])
+        except (TypeError, ValueError, KeyError) as exc:
+            raise serializers.ValidationError("location must contain lat and lng coordinates.") from exc
+        if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+            raise serializers.ValidationError("location coordinates are out of range.")
+        return json.dumps({"lat": lat, "lng": lng}, ensure_ascii=False)
 
     def create(self, validated_data):
         validated_data["user"] = self.context["request"].user
         return super().create(validated_data)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        try:
+            data["location"] = json.loads(instance.location) if instance.location else None
+        except (TypeError, ValueError, json.JSONDecodeError):
+            data["location"] = None
+        return data
 
 
 class FavoriteLocationSerializer(serializers.ModelSerializer):

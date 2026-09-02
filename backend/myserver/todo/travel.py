@@ -12,6 +12,7 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 KAKAO_DIRECTIONS_URL = "https://apis-navi.kakaomobility.com/v1/directions"
 KAKAO_FUTURE_DIRECTIONS_URL = "https://apis-navi.kakaomobility.com/v1/future/directions"
+TRAVEL_PLAN_HORIZON_DAYS = 7
 
 
 def _parse_location(value):
@@ -84,7 +85,7 @@ def _request_travel_time(origin, destination, departure_time=None):
         return None
 
 
-def _warning_base(previous, next_task):
+def _plan_base(previous, next_task):
     return {
         "previous_task_id": previous.id,
         "next_task_id": next_task.id,
@@ -97,15 +98,20 @@ def _warning_base(previous, next_task):
     }
 
 
-def calculate_travel_warnings(tasks):
-    """Return warnings only for upcoming consecutive tasks whose travel estimate exceeds the gap."""
+def calculate_travel_plans(tasks, horizon_days=TRAVEL_PLAN_HORIZON_DAYS):
+    """Return upcoming travel plans once, then let callers derive warnings.
+
+    The short horizon avoids routing distant calendar entries every time the app
+    refreshes while still covering the period where departure guidance is useful.
+    """
     ordered = sorted(tasks, key=lambda task: (task.date, task.id))
-    warnings = []
+    plans = []
     now = timezone.now()
-    logger.info("Travel warning check: %s tasks", len(ordered))
+    horizon = now + timedelta(days=horizon_days)
+    logger.info("Travel plan check: %s tasks", len(ordered))
 
     for previous, next_task in zip(ordered, ordered[1:]):
-        if next_task.date <= now:
+        if next_task.date <= now or next_task.date > horizon:
             continue
         if not previous.end or not previous.location or not next_task.location:
             continue
@@ -116,15 +122,17 @@ def calculate_travel_warnings(tasks):
             continue
 
         gap_seconds = int((next_task.date - previous.end).total_seconds())
-        warning_base = _warning_base(previous, next_task)
+        plan_base = _plan_base(previous, next_task)
+
         if gap_seconds < 0:
-            warnings.append({
-                **warning_base,
+            plans.append({
+                **plan_base,
                 "available_seconds": gap_seconds,
                 "travel_seconds": 0,
                 "distance_meters": 0,
                 "deficit_seconds": abs(gap_seconds),
                 "recommended_departure_at": None,
+                "requires_attention": True,
                 "reason": "overlap",
             })
             continue
@@ -136,18 +144,23 @@ def calculate_travel_warnings(tasks):
         if not route:
             continue
 
-        deficit = route["duration"] - gap_seconds
-        if deficit > 0:
-            recommended_departure_at = next_task.date - timedelta(seconds=route["duration"])
-            warnings.append({
-                **warning_base,
-                "available_seconds": gap_seconds,
-                "travel_seconds": route["duration"],
-                "distance_meters": route["distance"],
-                "deficit_seconds": deficit,
-                "recommended_departure_at": recommended_departure_at.isoformat(),
-                "reason": "travel_time",
-            })
+        recommended_departure_at = next_task.date - timedelta(seconds=route["duration"])
+        deficit = max(0, route["duration"] - gap_seconds)
+        plans.append({
+            **plan_base,
+            "available_seconds": gap_seconds,
+            "travel_seconds": route["duration"],
+            "distance_meters": route["distance"],
+            "deficit_seconds": deficit,
+            "recommended_departure_at": recommended_departure_at.isoformat(),
+            "requires_attention": deficit > 0,
+            "reason": "travel_time",
+        })
 
-    logger.info("Travel warning result: %s warnings", len(warnings))
-    return warnings
+    logger.info("Travel plan result: %s plans", len(plans))
+    return plans
+
+
+def calculate_travel_warnings(tasks):
+    """Backward-compatible helper returning only plans that need attention."""
+    return [plan for plan in calculate_travel_plans(tasks) if plan["requires_attention"]]

@@ -134,7 +134,7 @@ class TravelWarningTests(APITestCase):
             location_name=location_name,
         )
 
-    @patch("todo.views.calculate_travel_warnings")
+    @patch("todo.views.calculate_travel_plans")
     def test_travel_warnings_endpoint_returns_calculated_warnings(self, calculate):
         self._task("첫 일정", 0, 60, '{"lat":37.5,"lng":126.9}', "출발지")
         self._task("다음 일정", 70, 120, '{"lat":37.6,"lng":127.0}', "목적지")
@@ -144,16 +144,19 @@ class TravelWarningTests(APITestCase):
             "available_seconds": 600,
             "travel_seconds": 1200,
             "deficit_seconds": 600,
+            "recommended_departure_at": self.base.isoformat(),
+            "requires_attention": True,
             "reason": "travel_time",
         }]
 
         response = self.client.get(reverse("task-travel-warnings"))
 
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["plans"]), 1)
         self.assertEqual(len(response.data["warnings"]), 1)
         calculate.assert_called_once()
 
-    @patch("todo.views.calculate_travel_warnings", return_value=[])
+    @patch("todo.views.calculate_travel_plans", return_value=[])
     def test_travel_warnings_isolated_to_authenticated_user(self, calculate):
         self._task("내 일정 1", 0, 30, '{"lat":37.5,"lng":126.9}', "내 위치 1")
         self._task("내 일정 2", 60, 90, '{"lat":37.6,"lng":127.0}', "내 위치 2")
@@ -169,6 +172,7 @@ class TravelWarningTests(APITestCase):
         response = self.client.get(reverse("task-travel-warnings"))
 
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["plans"], [])
         self.assertEqual(response.data["warnings"], [])
         calculate.assert_called_once()
         tasks = calculate.call_args.args[0]

@@ -23,12 +23,37 @@ export default function ProductDashboard({ tasks, warnings, searchQuery, onSearc
       const events = parseIcs(text).slice(0, 100);
       if (!events.length) throw new Error('가져올 일정을 찾지 못했습니다.');
       await Promise.all(events.map((item) => api.post('tasks/', item)));
-      await onRefresh?.();
+      if (onRefresh) await onRefresh();
       alert(`${events.length}개의 일정을 가져왔습니다. 장소 좌표가 없는 일정은 필요할 때 장소를 다시 선택해주세요.`);
+      if (!onRefresh) window.location.reload();
     } catch (error) {
       alert(error.message || '캘린더 파일을 가져오지 못했습니다.');
     } finally {
       setIsImporting(false);
+    }
+  };
+
+  const deleteAccountData = async () => {
+    if (onDeleteAccount) return onDeleteAccount();
+    if (!window.confirm('ToDOCalender에 저장한 일정, 카테고리, 즐겨찾는 장소가 모두 삭제됩니다. 계속할까요?')) return;
+    if (!window.confirm('삭제한 앱 데이터는 복구할 수 없습니다. 정말 삭제할까요?')) return;
+    try {
+      await api.delete('account/');
+      localStorage.removeItem('todo-calendar-departure-alerts');
+      const reload = () => window.location.reload();
+      if (window.Kakao?.Auth?.logout) {
+        try {
+          const result = window.Kakao.Auth.logout(reload);
+          if (result?.then) result.finally(reload);
+          else window.setTimeout(reload, 800);
+        } catch {
+          reload();
+        }
+      } else {
+        reload();
+      }
+    } catch {
+      alert('앱 데이터를 삭제하지 못했습니다. 잠시 후 다시 시도해주세요.');
     }
   };
 
@@ -54,7 +79,7 @@ export default function ProductDashboard({ tasks, warnings, searchQuery, onSearc
       <div className="product-dashboard-actions">
         <button type="button" onClick={() => exportIcs(tasks)}>ICS 내보내기</button>
         <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isImporting}>{isImporting ? '가져오는 중…' : 'ICS 가져오기'}</button>
-        <button type="button" className="data-delete-action" onClick={onDeleteAccount}>내 앱 데이터 삭제</button>
+        <button type="button" className="data-delete-action" onClick={deleteAccountData}>내 앱 데이터 삭제</button>
         <input ref={fileInputRef} type="file" accept=".ics,text/calendar" hidden onChange={importCalendar} />
       </div>
       <p className="product-dashboard-note">출발 알림은 현재 웹앱을 열어둔 동안 권장 출발 시각에 브라우저 알림으로 알려드려요. Google·Apple·Outlook 캘린더는 ICS 파일로 가져오거나 내보낼 수 있어요.</p>

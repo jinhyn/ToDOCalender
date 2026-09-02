@@ -86,6 +86,26 @@ class TaskViewSet(viewsets.ModelViewSet):
             )
         return queryset
 
+    @action(detail=False, methods=["post"], url_path="bulk")
+    def bulk(self, request):
+        task_items = request.data.get("tasks")
+        if not isinstance(task_items, list) or not task_items:
+            return Response({"tasks": "A non-empty list is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(task_items) > 100:
+            return Response({"tasks": "At most 100 tasks can be imported at once."}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializers = []
+        for index, item in enumerate(task_items):
+            serializer = self.get_serializer(data=item)
+            if not serializer.is_valid():
+                return Response({"index": index, "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+            serializers.append(serializer)
+
+        with transaction.atomic():
+            created = [serializer.save() for serializer in serializers]
+
+        return Response(self.get_serializer(created, many=True).data, status=status.HTTP_201_CREATED)
+
     @action(detail=False, methods=["post"], url_path="recurring")
     def recurring(self, request):
         recurrence_type = request.data.get("recurrence_type", "none")
@@ -126,7 +146,6 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="travel-warnings")
     def travel_warnings(self, request):
-        # Do not apply the optional task search filter to travel-safety calculations.
         tasks = list(Task.objects.filter(user=request.user).select_related("category").order_by("date", "id"))
         logger.info("Travel plan check: task_count=%d", len(tasks))
 

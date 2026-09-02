@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Select from 'react-select';
+import api from '../services/axios';
 import { useKakaoMap } from '../hooks/useKakaoMap';
 import './LocationSuggestions.css';
 import './ScheduleTime.css';
@@ -27,11 +28,13 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
   const [searchKeyword, setSearchKeyword] = useState('');
   const [recurrenceType, setRecurrenceType] = useState('none');
   const [recurrenceCount, setRecurrenceCount] = useState(4);
+  const [favoriteLocations, setFavoriteLocations] = useState([]);
   const {
     mapRef,
     searchLocation,
     searchLocationSuggestions,
     selectedLocation,
+    setSelectedLocation,
     locationName,
     setLocationName,
     searchResults,
@@ -46,6 +49,13 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
   const taskCategory = initialData?.task?.category_detail?.name ?? '일반';
   const defaultDate = initialData?.defaultDate ?? '';
   const travelWarning = initialData?.travelWarning;
+
+  useEffect(() => {
+    if (!show) return;
+    api.get('favorite-locations/')
+      .then((response) => setFavoriteLocations(response.data || []))
+      .catch(() => setFavoriteLocations([]));
+  }, [show]);
 
   useEffect(() => {
     if (!show) return;
@@ -95,6 +105,40 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
   useEffect(() => {
     if (show && taskId !== null) setSearchKeyword(locationName || '');
   }, [show, taskId, locationName]);
+
+  const refreshFavorites = async () => {
+    const response = await api.get('favorite-locations/');
+    setFavoriteLocations(response.data || []);
+  };
+
+  const saveFavoriteLocation = async () => {
+    if (!selectedLocation || !locationName.trim()) return;
+    try {
+      await api.post('favorite-locations/', { name: locationName.trim(), location: selectedLocation });
+      await refreshFavorites();
+    } catch (error) {
+      const detail = error.response?.data?.name?.[0] || error.response?.data?.detail;
+      alert(detail || '즐겨찾기 장소를 저장하지 못했습니다. 같은 이름이 이미 있는지 확인해주세요.');
+    }
+  };
+
+  const chooseFavoriteLocation = (favorite) => {
+    const location = typeof favorite.location === 'string' ? safeParseLocation(favorite.location) : favorite.location;
+    if (!location?.lat || !location?.lng) return;
+    setSelectedLocation({ lat: Number(location.lat), lng: Number(location.lng) });
+    setLocationName(favorite.name);
+    setSearchKeyword(favorite.name);
+  };
+
+  const deleteFavoriteLocation = async (event, favoriteId) => {
+    event.stopPropagation();
+    try {
+      await api.delete(`favorite-locations/${favoriteId}/`);
+      setFavoriteLocations((items) => items.filter((item) => item.id !== favoriteId));
+    } catch {
+      alert('즐겨찾기 장소를 삭제하지 못했습니다.');
+    }
+  };
 
   const handleSubmit = (e) => {
     e?.preventDefault();
@@ -178,7 +222,19 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
 
             <div className="form-section location-section">
               <div className="form-section-heading">위치</div>
-              <div className="selected-location-edit-card"><div className="selected-location-edit-label">선택한 장소</div><div className="location-name-edit-row"><span className="selected-location-icon">📍</span><input className="form-input location-name-input" type="text" value={locationName} onChange={(e) => setLocationName(e.target.value)} placeholder="장소 이름" aria-label="선택한 장소 이름" /></div><div className="location-edit-hint">장소 이름만 바꾸고 싶다면 여기서 일부 단어를 수정하세요. 지도 위치는 그대로 유지됩니다.</div></div>
+              {favoriteLocations.length > 0 && (
+                <div className="favorite-location-block">
+                  <div className="favorite-location-heading">자주 쓰는 장소</div>
+                  <div className="favorite-location-list">
+                    {favoriteLocations.map((favorite) => (
+                      <button key={favorite.id} type="button" className="favorite-location-chip" onClick={() => chooseFavoriteLocation(favorite)}>
+                        <span>★ {favorite.name}</span><span className="favorite-location-remove" role="button" tabIndex={0} aria-label={`${favorite.name} 즐겨찾기 삭제`} onClick={(event) => deleteFavoriteLocation(event, favorite.id)}>×</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="selected-location-edit-card"><div className="selected-location-edit-label">선택한 장소</div><div className="location-name-edit-row"><span className="selected-location-icon">📍</span><input className="form-input location-name-input" type="text" value={locationName} onChange={(e) => setLocationName(e.target.value)} placeholder="장소 이름" aria-label="선택한 장소 이름" /></div><div className="location-edit-hint">장소 이름만 바꾸고 싶다면 여기서 일부 단어를 수정하세요. 지도 위치는 그대로 유지됩니다.</div>{selectedLocation && locationName.trim() && <button type="button" className="favorite-location-save" onClick={saveFavoriteLocation}>★ 자주 쓰는 장소로 저장</button>}</div>
 
               <label className="form-label" htmlFor="location-search">다른 장소로 변경</label>
               <div className="location-search"><input id="location-search" className="form-input" type="text" value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} placeholder="장소 이름을 입력하세요" autoComplete="off" /><button type="button" className="location-search-button" onClick={() => searchLocation(searchKeyword)}>검색</button></div>
@@ -207,6 +263,7 @@ function applyDuration(minutes, startDate, startTime, setEndDate, setEndTime) {
   const [date, time] = local.split('T');
   setEndDate(date); setEndTime(time);
 }
+function safeParseLocation(value) { try { return JSON.parse(value); } catch { return null; } }
 function formatScheduleDateRange(startDate, endDate) { if (!startDate) return '날짜 미지정'; const startText = formatScheduleDate(startDate); if (!endDate || endDate === startDate) return startText; return `${startText} → ${formatScheduleDate(endDate)}`; }
 function formatScheduleDate(value) { const date = new Date(`${value}T00:00:00`); if (Number.isNaN(date.getTime())) return value; return date.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }); }
 function formatDateTime(value) { const date = new Date(value); if (Number.isNaN(date.getTime())) return ''; return date.toLocaleString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }); }

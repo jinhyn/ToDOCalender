@@ -76,9 +76,7 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
     }
 
     const now = new Date();
-    const localTime = new Date(now.getTime() - (now.getTimezoneOffset() * 60000))
-      .toISOString()
-      .slice(0, 16);
+    const localTime = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
     const defaultStart = defaultDate ? `${defaultDate}T09:00` : localTime;
     const defaultEnd = defaultDate ? `${defaultDate}T09:30` : localTime;
     const start = splitDateTime(defaultStart);
@@ -142,7 +140,7 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
 
   const handleSubmit = (e) => {
     e?.preventDefault();
-    if (!taskTitle.trim() || !selectedLocation) return alert('제목과 위치를 확인해주세요.');
+    if (!taskTitle.trim()) return alert('일정 제목을 입력해주세요.');
 
     const startValue = `${startDate}T${startTime}`;
     const endValue = `${endDate}T${endTime}`;
@@ -156,18 +154,21 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
       date: startValue,
       end: endValue,
       tag,
-      location: selectedLocation,
-      locationName: locationName.trim(),
+      location: selectedLocation || null,
+      locationName: selectedLocation ? locationName.trim() : '',
       recurrenceType: taskId === null ? recurrenceType : 'none',
       recurrenceCount: taskId === null ? recurrenceCount : 1,
     });
   };
 
+  const removeLocation = () => {
+    clearLocation();
+    setSearchKeyword('');
+  };
+
   if (!show) return null;
 
-  const selectOptions = categories
-    .filter((cat) => cat.name !== '전체')
-    .map((cat) => ({ value: cat.name, label: cat.name }));
+  const selectOptions = categories.filter((cat) => cat.name !== '전체').map((cat) => ({ value: cat.name, label: cat.name }));
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -221,22 +222,28 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
             </div>
 
             <div className="form-section location-section">
-              <div className="form-section-heading">위치</div>
+              <div className="form-section-heading">위치 <span className="form-help">선택 사항</span></div>
+              <div className="location-search-hint">장소 없이도 일정을 저장할 수 있어요. 연속 일정의 이동시간과 권장 출발시간이 필요할 때만 장소를 추가하세요.</div>
               {favoriteLocations.length > 0 && (
                 <div className="favorite-location-block">
                   <div className="favorite-location-heading">자주 쓰는 장소</div>
                   <div className="favorite-location-list">
                     {favoriteLocations.map((favorite) => (
                       <button key={favorite.id} type="button" className="favorite-location-chip" onClick={() => chooseFavoriteLocation(favorite)}>
-                        <span>★ {favorite.name}</span><span className="favorite-location-remove" role="button" tabIndex={0} aria-label={`${favorite.name} 즐겨찾기 삭제`} onClick={(event) => deleteFavoriteLocation(event, favorite.id)}>×</span>
+                        <span>★ {favorite.name}</span><span className="favorite-location-remove" aria-label={`${favorite.name} 즐겨찾기 삭제`} onClick={(event) => deleteFavoriteLocation(event, favorite.id)}>×</span>
                       </button>
                     ))}
                   </div>
                 </div>
               )}
-              <div className="selected-location-edit-card"><div className="selected-location-edit-label">선택한 장소</div><div className="location-name-edit-row"><span className="selected-location-icon">📍</span><input className="form-input location-name-input" type="text" value={locationName} onChange={(e) => setLocationName(e.target.value)} placeholder="장소 이름" aria-label="선택한 장소 이름" /></div><div className="location-edit-hint">장소 이름만 바꾸고 싶다면 여기서 일부 단어를 수정하세요. 지도 위치는 그대로 유지됩니다.</div>{selectedLocation && locationName.trim() && <button type="button" className="favorite-location-save" onClick={saveFavoriteLocation}>★ 자주 쓰는 장소로 저장</button>}</div>
+              <div className="selected-location-edit-card">
+                <div className="selected-location-edit-label">선택한 장소</div>
+                <div className="location-name-edit-row"><span className="selected-location-icon">📍</span><input className="form-input location-name-input" type="text" value={locationName} onChange={(e) => setLocationName(e.target.value)} placeholder="장소를 선택하면 이름이 표시돼요" aria-label="선택한 장소 이름" /></div>
+                <div className="location-edit-hint">장소 이름만 수정하면 지도 좌표는 그대로 유지됩니다.</div>
+                {selectedLocation && <div className="location-card-actions"><button type="button" className="favorite-location-save" onClick={saveFavoriteLocation} disabled={!locationName.trim()}>★ 자주 쓰는 장소로 저장</button><button type="button" className="location-clear-button" onClick={removeLocation}>장소 제거</button></div>}
+              </div>
 
-              <label className="form-label" htmlFor="location-search">다른 장소로 변경</label>
+              <label className="form-label" htmlFor="location-search">장소 검색</label>
               <div className="location-search"><input id="location-search" className="form-input" type="text" value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} placeholder="장소 이름을 입력하세요" autoComplete="off" /><button type="button" className="location-search-button" onClick={() => searchLocation(searchKeyword)}>검색</button></div>
               <div className="location-search-hint">장소 이름을 입력하면 검색 결과가 나타나요.</div>
 

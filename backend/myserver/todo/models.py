@@ -29,3 +29,20 @@ class Task(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class FavoriteLocation(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="favorite_locations")
+    name = models.CharField(max_length=255)
+    location = models.CharField(max_length=255)
+    address = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "name"], name="unique_favorite_location_name_per_user"),
+        ]
+
+    def __str__(self):
+        return self.name

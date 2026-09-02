@@ -4,6 +4,7 @@ import KakaoAuthDisplay from './components/KakaoAuthDisplay';
 import CategoryManager from './components/CategoryManager';
 import CalendarDisplay from './components/CalendarDisplay';
 import TaskPopup from './components/TaskPopup';
+import ProductDashboard from './components/ProductDashboard';
 import { useKakaoAuth } from './hooks/useKakaoAuth';
 import './components/ProductStates.css';
 
@@ -17,6 +18,8 @@ export default function App() {
   const [travelWarnings, setTravelWarnings] = useState([]);
   const [isInitialLoading, setIsInitialLoading] = useState(false);
   const [initialLoadError, setInitialLoadError] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('todo-calendar-departure-alerts') === 'true');
   const memoizedCategories = useMemo(() => apiCategories, [apiCategories]);
 
   const fetchCategories = useCallback(async () => { if (!user) return; const response = await api.get('categories/'); setApiCategories(response.data); }, [user]);
@@ -49,6 +52,7 @@ export default function App() {
       setApiTasks([]);
       setTravelWarnings([]);
       setFilterTag('전체');
+      setSearchQuery('');
       setInitialLoadError('');
       setIsInitialLoading(false);
       return;
@@ -56,6 +60,24 @@ export default function App() {
     loadInitialData();
   }, [user, loadInitialData]);
   useEffect(() => { if (user && apiTasks.length >= 2) fetchTravelWarnings(); else setTravelWarnings([]); }, [user, apiTasks, fetchTravelWarnings]);
+
+  useEffect(() => {
+    if (!notificationsEnabled || typeof Notification === 'undefined' || Notification.permission !== 'granted') return undefined;
+    const now = Date.now();
+    const timers = travelWarnings
+      .filter((warning) => warning.reason === 'travel_time' && warning.recommended_departure_at)
+      .map((warning) => {
+        const delay = new Date(warning.recommended_departure_at).getTime() - now;
+        if (delay <= 0 || delay > 24 * 60 * 60 * 1000) return null;
+        return window.setTimeout(() => {
+          new Notification('이제 출발할 시간이에요', {
+            body: `${warning.next_title}까지 이동하려면 지금 출발하는 것이 좋아요.`,
+          });
+        }, delay);
+      })
+      .filter(Boolean);
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [notificationsEnabled, travelWarnings]);
 
   const reorderCategories = useCallback(async (categories) => {
     const previous = apiCategories; setApiCategories(categories);
@@ -70,9 +92,16 @@ export default function App() {
   }, [fetchTasks]);
   const handleSaveTask = useCallback(async (taskData) => {
     try {
-      const isEdit = !!taskData.id; const url = isEdit ? `tasks/${taskData.id}/` : 'tasks/';
+      const isEdit = !!taskData.id;
       const payload = { title: taskData.title, date: taskData.date, end: taskData.end, category: apiCategories.find((c) => c.name === taskData.tag)?.id || null, location: typeof taskData.location === 'object' ? JSON.stringify(taskData.location) : taskData.location, location_name: taskData.locationName || '' };
-      if (isEdit) await api.put(url, payload); else await api.post(url, payload); await fetchTasks(); setShowPopup(false);
+      if (isEdit) {
+        await api.put(`tasks/${taskData.id}/`, payload);
+      } else {
+        const payloads = buildRecurringPayloads(payload, taskData.recurrenceType, taskData.recurrenceCount);
+        await Promise.all(payloads.map((item) => api.post('tasks/', item)));
+      }
+      await fetchTasks();
+      setShowPopup(false);
     } catch (error) { alert(`저장 실패: ${JSON.stringify(error.response?.data || error.message)}`); }
   }, [apiCategories, fetchTasks]);
   const handleDeleteTask = useCallback(async (taskId) => {
@@ -88,7 +117,24 @@ export default function App() {
     if (filterTag === previousName && response.data?.name) setFilterTag(response.data.name);
     await Promise.all([fetchCategories(), fetchTasks()]);
   }, [filterTag, fetchCategories, fetchTasks]);
+  const toggleNotifications = useCallback(async () => {
+    if (notificationsEnabled) {
+      localStorage.setItem('todo-calendar-departure-alerts', 'false');
+      setNotificationsEnabled(false);
+      return;
+    }
+    if (typeof Notification === 'undefined') return alert('이 브라우저는 알림을 지원하지 않습니다.');
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') return alert('브라우저 알림 권한이 필요합니다.');
+    localStorage.setItem('todo-calendar-departure-alerts', 'true');
+    setNotificationsEnabled(true);
+  }, [notificationsEnabled]);
 
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const visibleTasks = useMemo(() => {
+    if (!normalizedSearch) return apiTasks;
+    return apiTasks.filter((task) => [task.title, task.locationName, task.tag].some((value) => String(value || '').toLowerCase().includes(normalizedSearch)));
+  }, [apiTasks, normalizedSearch]);
   const warningByNextTaskId = useMemo(() => Object.fromEntries(travelWarnings.map((warning) => [warning.next_task_id, warning])), [travelWarnings]);
   if (!isKakaoAuthSdkLoaded) return <div className="app-loading"><div className="loading-orb">✓</div><span>캘린더를 준비하고 있어요...</span></div>;
   if (!user) return <KakaoAuthDisplay user={null} loginWithKakao={loginWithKakao} logout={logout} />;
@@ -102,35 +148,19 @@ export default function App() {
       <main className="app-main">
         <section className="welcome-strip"><div><span className="welcome-kicker">오늘의 계획</span><h2>차근차근, 하나씩 해볼까요?</h2><p>일정을 정리하고 이동 시간까지 미리 확인해보세요.</p></div><div className="welcome-sun" aria-hidden="true">✦</div></section>
 
-        {isInitialLoading && (
-          <section className="product-state-card" role="status" aria-live="polite">
-            <div className="product-state-icon">↻</div>
-            <div><strong>일정을 불러오고 있어요</strong><p>첫 접속에서는 서버가 준비되는 데 잠시 걸릴 수 있어요.</p></div>
-          </section>
-        )}
-
-        {initialLoadError && !isInitialLoading && (
-          <section className="product-state-card error" role="alert">
-            <div className="product-state-icon">!</div>
-            <div className="product-state-copy"><strong>불러오기에 실패했어요</strong><p>{initialLoadError}</p></div>
-            <button type="button" className="product-state-action" onClick={loadInitialData}>다시 시도</button>
-          </section>
-        )}
+        {isInitialLoading && <section className="product-state-card" role="status" aria-live="polite"><div className="product-state-icon">↻</div><div><strong>일정을 불러오고 있어요</strong><p>첫 접속에서는 서버가 준비되는 데 잠시 걸릴 수 있어요.</p></div></section>}
+        {initialLoadError && !isInitialLoading && <section className="product-state-card error" role="alert"><div className="product-state-icon">!</div><div className="product-state-copy"><strong>불러오기에 실패했어요</strong><p>{initialLoadError}</p></div><button type="button" className="product-state-action" onClick={loadInitialData}>다시 시도</button></section>}
 
         {!isInitialLoading && !initialLoadError && (
           <>
+            <ProductDashboard tasks={apiTasks} warnings={travelWarnings} searchQuery={searchQuery} onSearchChange={setSearchQuery} notificationsEnabled={notificationsEnabled} onToggleNotifications={toggleNotifications} />
             <section className="category-section"><div className="section-heading"><div><h2>카테고리</h2><p>드래그해서 순서를 바꾸고, ⋯ 버튼에서 이름과 색상을 수정할 수 있어요</p></div><span className="section-badge">MY LIST</span></div>
               <CategoryManager categories={memoizedCategories} setFilterTag={setFilterTag} currentFilterTag={filterTag} reorderCategories={reorderCategories} addCategory={async (name, color) => { await api.post('categories/', { name, color }); await fetchCategories(); }} updateCategory={handleUpdateCategory} deleteCategory={handleDeleteCategory} />
             </section>
-            {travelWarnings.length > 0 && <section className="travel-warning-panel" aria-label="이동시간 경고"><div className="travel-warning-heading"><span className="travel-warning-icon">!</span><div><strong>이동시간을 조금 확인해주세요</strong><div className="travel-warning-subtitle">앞으로 예정된 일정 중 이동할 시간이 부족한 경우만 보여드려요.</div></div></div><div className="travel-warning-list">{travelWarnings.slice(0, 3).map((warning) => <div className="travel-warning-item" key={`${warning.previous_task_id}-${warning.next_task_id}`}><div><strong>{warning.previous_title}</strong><span className="warning-arrow">→</span><strong>{warning.next_title}</strong></div><span className="travel-warning-date">{formatScheduleDate(warning.next_start)}</span>{warning.reason === 'overlap' ? <span>일정 시간이 겹칩니다.</span> : <span>이동 예상 {formatDuration(warning.travel_seconds)} · 이동 가능 {formatDuration(warning.available_seconds)} · <b>{formatDuration(warning.deficit_seconds)} 부족</b></span>}</div>)}</div></section>}
-            {apiTasks.length === 0 && (
-              <section className="product-state-card empty">
-                <div className="product-state-icon">＋</div>
-                <div className="product-state-copy"><strong>아직 등록된 일정이 없어요</strong><p>첫 일정을 만들고 장소를 등록하면 이동시간까지 함께 확인할 수 있어요.</p></div>
-                <button type="button" className="product-state-action" onClick={() => { setPopupInitialData({ defaultDate: todayLocalDate() }); setShowPopup(true); }}>첫 일정 추가</button>
-              </section>
-            )}
-            <section className="calendar-card"><CalendarDisplay tasks={apiTasks} categories={memoizedCategories} filterTag={filterTag} travelWarnings={warningByNextTaskId}
+            {travelWarnings.length > 0 && <section className="travel-warning-panel" aria-label="이동시간 경고"><div className="travel-warning-heading"><span className="travel-warning-icon">!</span><div><strong>이동시간을 조금 확인해주세요</strong><div className="travel-warning-subtitle">앞으로 예정된 일정 중 이동할 시간이 부족한 경우만 보여드려요.</div></div></div><div className="travel-warning-list">{travelWarnings.slice(0, 3).map((warning) => <div className="travel-warning-item" key={`${warning.previous_task_id}-${warning.next_task_id}`}><div><strong>{warning.previous_title}</strong><span className="warning-arrow">→</span><strong>{warning.next_title}</strong></div><span className="travel-warning-date">{formatScheduleDate(warning.next_start)}</span>{warning.reason === 'overlap' ? <span>일정 시간이 겹칩니다.</span> : <><span>이동 예상 {formatDuration(warning.travel_seconds)} · 이동 가능 {formatDuration(warning.available_seconds)} · <b>{formatDuration(warning.deficit_seconds)} 부족</b></span>{warning.recommended_departure_at && <span><b>권장 출발 {formatScheduleDate(warning.recommended_departure_at)}</b></span>}</>}</div>)}</div></section>}
+            {apiTasks.length === 0 && <section className="product-state-card empty"><div className="product-state-icon">＋</div><div className="product-state-copy"><strong>아직 등록된 일정이 없어요</strong><p>첫 일정을 만들고 장소를 등록하면 이동시간까지 함께 확인할 수 있어요.</p></div><button type="button" className="product-state-action" onClick={() => { setPopupInitialData({ defaultDate: todayLocalDate() }); setShowPopup(true); }}>첫 일정 추가</button></section>}
+            {apiTasks.length > 0 && visibleTasks.length === 0 && <section className="product-state-card empty"><div className="product-state-icon">⌕</div><div className="product-state-copy"><strong>검색 결과가 없어요</strong><p>일정 제목, 장소 또는 카테고리 이름으로 다시 검색해보세요.</p></div></section>}
+            <section className="calendar-card"><CalendarDisplay tasks={visibleTasks} categories={memoizedCategories} filterTag={filterTag} travelWarnings={warningByNextTaskId}
               onDateClick={(info) => { setPopupInitialData({ defaultDate: info.dateStr }); setShowPopup(true); }}
               onEventClick={(info) => { const task = info.event.extendedProps.originalTask; setPopupInitialData({ task, onDelete: handleDeleteTask, travelWarning: warningByNextTaskId[task.id] }); setShowPopup(true); }} onEventOperation={handleEventOperation} /></section>
           </>
@@ -139,6 +169,28 @@ export default function App() {
       {showPopup && <TaskPopup key="task-popup-stable" show={showPopup} onClose={() => setShowPopup(false)} onSave={handleSaveTask} categories={memoizedCategories} initialData={popupInitialData} />}
     </div>
   );
+}
+
+function buildRecurringPayloads(payload, recurrenceType = 'none', recurrenceCount = 1) {
+  const count = recurrenceType === 'none' ? 1 : Math.min(30, Math.max(1, Number(recurrenceCount) || 1));
+  return Array.from({ length: count }, (_, index) => {
+    if (index === 0) return payload;
+    return { ...payload, date: shiftRecurringDate(payload.date, recurrenceType, index), end: payload.end ? shiftRecurringDate(payload.end, recurrenceType, index) : null };
+  });
+}
+function shiftRecurringDate(value, type, index) {
+  const date = new Date(value);
+  if (type === 'daily') date.setDate(date.getDate() + index);
+  if (type === 'weekly') date.setDate(date.getDate() + index * 7);
+  if (type === 'monthly') {
+    const originalDay = date.getDate();
+    date.setDate(1);
+    date.setMonth(date.getMonth() + index);
+    const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    date.setDate(Math.min(originalDay, lastDay));
+  }
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
 }
 function formatDuration(seconds) { const minutes = Math.max(0, Math.ceil((seconds || 0) / 60)); if (minutes < 60) return `${minutes}분`; const hours = Math.floor(minutes / 60); const rest = minutes % 60; return rest ? `${hours}시간 ${rest}분` : `${hours}시간`; }
 function formatScheduleDate(value) { if (!value) return ''; const date = new Date(value); if (Number.isNaN(date.getTime())) return ''; return date.toLocaleString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }); }

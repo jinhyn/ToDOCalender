@@ -2,7 +2,7 @@ import json
 
 from rest_framework import serializers
 
-from .models import Category, Task
+from .models import Category, FavoriteLocation, Task
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -60,3 +60,42 @@ class TaskSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data["user"] = self.context["request"].user
         return super().create(validated_data)
+
+
+class FavoriteLocationSerializer(serializers.ModelSerializer):
+    location = serializers.JSONField()
+
+    class Meta:
+        model = FavoriteLocation
+        fields = ["id", "name", "location", "address", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+    def validate_location(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("location must contain lat and lng coordinates.")
+        try:
+            lat = float(value["lat"])
+            lng = float(value["lng"])
+        except (TypeError, ValueError, KeyError) as exc:
+            raise serializers.ValidationError("location must contain lat and lng coordinates.") from exc
+        if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+            raise serializers.ValidationError("location coordinates are out of range.")
+        return {"lat": lat, "lng": lng}
+
+    def create(self, validated_data):
+        validated_data["user"] = self.context["request"].user
+        validated_data["location"] = json.dumps(validated_data["location"], ensure_ascii=False)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        if "location" in validated_data:
+            validated_data["location"] = json.dumps(validated_data["location"], ensure_ascii=False)
+        return super().update(instance, validated_data)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        try:
+            data["location"] = json.loads(instance.location)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            data["location"] = None
+        return data

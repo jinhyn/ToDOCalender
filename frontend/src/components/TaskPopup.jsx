@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Select from 'react-select';
+import api from '../services/axios';
 import { useKakaoMap } from '../hooks/useKakaoMap';
 import './LocationSuggestions.css';
 import './ScheduleTime.css';
@@ -25,11 +26,15 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
   const [endTime, setEndTime] = useState('');
   const [tag, setTag] = useState('일반');
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [recurrenceType, setRecurrenceType] = useState('none');
+  const [recurrenceCount, setRecurrenceCount] = useState(4);
+  const [favoriteLocations, setFavoriteLocations] = useState([]);
   const {
     mapRef,
     searchLocation,
     searchLocationSuggestions,
     selectedLocation,
+    setSelectedLocation,
     locationName,
     setLocationName,
     searchResults,
@@ -47,6 +52,13 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
 
   useEffect(() => {
     if (!show) return;
+    api.get('favorite-locations/')
+      .then((response) => setFavoriteLocations(response.data || []))
+      .catch(() => setFavoriteLocations([]));
+  }, [show]);
+
+  useEffect(() => {
+    if (!show) return;
 
     if (taskId !== null) {
       const start = splitDateTime(taskDate);
@@ -58,6 +70,8 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
       setEndTime(end.time || '09:30');
       setTag(taskCategory);
       setSearchKeyword('');
+      setRecurrenceType('none');
+      setRecurrenceCount(4);
       return;
     }
 
@@ -77,16 +91,14 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
     setEndTime(end.time);
     setTag('일반');
     setSearchKeyword('');
+    setRecurrenceType('none');
+    setRecurrenceCount(4);
     clearLocation();
   }, [show, taskId, taskDate, taskEnd, taskTitleValue, taskCategory, defaultDate, clearLocation]);
 
   useEffect(() => {
     if (!show || !searchKeyword.trim() || searchKeyword.trim() === locationName.trim()) return;
-
-    const timer = window.setTimeout(() => {
-      searchLocationSuggestions(searchKeyword);
-    }, 250);
-
+    const timer = window.setTimeout(() => searchLocationSuggestions(searchKeyword), 250);
     return () => window.clearTimeout(timer);
   }, [show, searchKeyword, locationName, searchLocationSuggestions]);
 
@@ -94,11 +106,43 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
     if (show && taskId !== null) setSearchKeyword(locationName || '');
   }, [show, taskId, locationName]);
 
+  const refreshFavorites = async () => {
+    const response = await api.get('favorite-locations/');
+    setFavoriteLocations(response.data || []);
+  };
+
+  const saveFavoriteLocation = async () => {
+    if (!selectedLocation || !locationName.trim()) return;
+    try {
+      await api.post('favorite-locations/', { name: locationName.trim(), location: selectedLocation });
+      await refreshFavorites();
+    } catch (error) {
+      const detail = error.response?.data?.name?.[0] || error.response?.data?.detail;
+      alert(detail || '즐겨찾기 장소를 저장하지 못했습니다. 같은 이름이 이미 있는지 확인해주세요.');
+    }
+  };
+
+  const chooseFavoriteLocation = (favorite) => {
+    const location = typeof favorite.location === 'string' ? safeParseLocation(favorite.location) : favorite.location;
+    if (!location?.lat || !location?.lng) return;
+    setSelectedLocation({ lat: Number(location.lat), lng: Number(location.lng) });
+    setLocationName(favorite.name);
+    setSearchKeyword(favorite.name);
+  };
+
+  const deleteFavoriteLocation = async (event, favoriteId) => {
+    event.stopPropagation();
+    try {
+      await api.delete(`favorite-locations/${favoriteId}/`);
+      setFavoriteLocations((items) => items.filter((item) => item.id !== favoriteId));
+    } catch {
+      alert('즐겨찾기 장소를 삭제하지 못했습니다.');
+    }
+  };
+
   const handleSubmit = (e) => {
     e?.preventDefault();
-    if (!taskTitle.trim() || !selectedLocation) {
-      return alert('제목과 위치를 확인해주세요.');
-    }
+    if (!taskTitle.trim() || !selectedLocation) return alert('제목과 위치를 확인해주세요.');
 
     const startValue = `${startDate}T${startTime}`;
     const endValue = `${endDate}T${endTime}`;
@@ -114,6 +158,8 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
       tag,
       location: selectedLocation,
       locationName: locationName.trim(),
+      recurrenceType: taskId === null ? recurrenceType : 'none',
+      recurrenceCount: taskId === null ? recurrenceCount : 1,
     });
   };
 
@@ -127,10 +173,7 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="task-modal" role="dialog" aria-modal="true" aria-labelledby="task-modal-title">
         <div className="task-modal-header">
-          <div>
-            <div className="task-modal-eyebrow">CALENDAR</div>
-            <h3 id="task-modal-title">{taskId !== null ? '일정 수정' : '새 일정 추가'}</h3>
-          </div>
+          <div><div className="task-modal-eyebrow">CALENDAR</div><h3 id="task-modal-title">{taskId !== null ? '일정 수정' : '새 일정 추가'}</h3></div>
           <button type="button" className="task-modal-close" onClick={onClose} aria-label="닫기">×</button>
         </div>
 
@@ -138,12 +181,8 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
           {travelWarning && (
             <div className="task-travel-warning">
               <div className="task-travel-warning-title">⚠️ 이동시간이 부족합니다</div>
-              <div className="task-travel-warning-text">
-                이전 일정 <strong>{travelWarning.previous_title}</strong>에서 이동해야 합니다. 예상 이동시간은{' '}
-                <strong>{formatDuration(travelWarning.travel_seconds)}</strong>이고, 이동 가능한 시간은{' '}
-                <strong>{formatDuration(travelWarning.available_seconds)}</strong>입니다.
-              </div>
-              <div className="task-travel-warning-deficit">약 {formatDuration(travelWarning.deficit_seconds)} 부족</div>
+              <div className="task-travel-warning-text">이전 일정 <strong>{travelWarning.previous_title}</strong>에서 이동해야 합니다. 예상 이동시간은 <strong>{formatDuration(travelWarning.travel_seconds)}</strong>이고, 이동 가능한 시간은 <strong>{formatDuration(travelWarning.available_seconds)}</strong>입니다.</div>
+              {travelWarning.recommended_departure_at && <div className="task-travel-warning-deficit">권장 출발 {formatDateTime(travelWarning.recommended_departure_at)}</div>}
             </div>
           )}
 
@@ -154,101 +193,61 @@ export default function TaskPopup({ show, onClose, onSave, categories, initialDa
               <input id="task-title" className="form-input" type="text" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="할 일 제목" />
 
               <label className="form-label">카테고리</label>
-              <Select
-                options={selectOptions}
-                value={selectOptions.find((o) => o.value === tag)}
-                onChange={(opt) => setTag(opt?.value || '일반')}
-                styles={{ control: (base) => ({ ...base, borderRadius: 10, borderColor: '#d9e0d6', minHeight: 42 }) }}
-              />
+              <Select options={selectOptions} value={selectOptions.find((o) => o.value === tag)} onChange={(opt) => setTag(opt?.value || '일반')} styles={{ control: (base) => ({ ...base, borderRadius: 10, borderColor: '#d9e0d6', minHeight: 42 }) }} />
 
-              <div className="form-label-row">
-                <label className="form-label">일정 시간</label>
-                <span className="form-help">15분 단위로 선택할 수 있어요</span>
-              </div>
+              <div className="form-label-row"><label className="form-label">일정 시간</label><span className="form-help">15분 단위로 선택할 수 있어요</span></div>
               <div className="schedule-time-card">
-                <div className="schedule-selected-date">
-                  <span className="schedule-selected-date-icon" aria-hidden="true">▣</span>
-                  <strong>{formatScheduleDateRange(startDate, endDate)}</strong>
-                  <span>{taskId !== null ? '날짜 변경은 캘린더에서 일정을 이동해주세요.' : '선택한 날짜'}</span>
-                </div>
+                <div className="schedule-selected-date"><span className="schedule-selected-date-icon" aria-hidden="true">▣</span><strong>{formatScheduleDateRange(startDate, endDate)}</strong><span>{taskId !== null ? '날짜 변경은 캘린더에서 일정을 이동해주세요.' : '선택한 날짜'}</span></div>
                 <div className="schedule-time-row">
-                  <div>
-                    <span className="schedule-time-label">시작</span>
-                    <select className="form-input schedule-time-select" value={startTime} onChange={(e) => setStartTime(e.target.value)} aria-label="시작 시간">
-                      {TIME_OPTIONS.map((time) => <option key={time} value={time}>{time}</option>)}
-                    </select>
-                  </div>
+                  <div><span className="schedule-time-label">시작</span><select className="form-input schedule-time-select" value={startTime} onChange={(e) => setStartTime(e.target.value)} aria-label="시작 시간">{TIME_OPTIONS.map((time) => <option key={time} value={time}>{time}</option>)}</select></div>
                   <span className="schedule-arrow" aria-hidden="true">→</span>
-                  <div>
-                    <span className="schedule-time-label">종료</span>
-                    <select className="form-input schedule-time-select" value={endTime} onChange={(e) => setEndTime(e.target.value)} aria-label="종료 시간">
-                      {TIME_OPTIONS.map((time) => <option key={time} value={time}>{time}</option>)}
-                    </select>
-                  </div>
+                  <div><span className="schedule-time-label">종료</span><select className="form-input schedule-time-select" value={endTime} onChange={(e) => setEndTime(e.target.value)} aria-label="종료 시간">{TIME_OPTIONS.map((time) => <option key={time} value={time}>{time}</option>)}</select></div>
                 </div>
-                <div className="schedule-quick-actions">
-                  {[30, 60, 90].map((minutes) => (
-                    <button key={minutes} type="button" onClick={() => applyDuration(minutes, startDate, startTime, setEndDate, setEndTime)}>{minutes}분</button>
-                  ))}
-                </div>
+                <div className="schedule-quick-actions">{[30, 60, 90].map((minutes) => <button key={minutes} type="button" onClick={() => applyDuration(minutes, startDate, startTime, setEndDate, setEndTime)}>{minutes}분</button>)}</div>
               </div>
+
+              {taskId === null && (
+                <div className="recurrence-card">
+                  <div className="recurrence-heading"><strong>반복 일정</strong><span>같은 일정이 필요한 만큼 자동 생성돼요.</span></div>
+                  <div className="recurrence-controls">
+                    <select className="form-input" value={recurrenceType} onChange={(e) => setRecurrenceType(e.target.value)} aria-label="반복 주기">
+                      <option value="none">반복 안 함</option><option value="daily">매일</option><option value="weekly">매주</option><option value="monthly">매월</option>
+                    </select>
+                    {recurrenceType !== 'none' && <label className="recurrence-count"><input className="form-input" type="number" min="2" max="30" value={recurrenceCount} onChange={(e) => setRecurrenceCount(Math.min(30, Math.max(2, Number(e.target.value) || 2)))} /><span>회 생성</span></label>}
+                  </div>
+                  {recurrenceType !== 'none' && <p>현재는 각 반복 일정을 개별 일정으로 저장합니다. 생성 후에는 필요한 날짜만 따로 수정하거나 삭제할 수 있어요.</p>}
+                </div>
+              )}
             </div>
 
             <div className="form-section location-section">
               <div className="form-section-heading">위치</div>
-              <div className="selected-location-edit-card">
-                <div className="selected-location-edit-label">선택한 장소</div>
-                <div className="location-name-edit-row">
-                  <span className="selected-location-icon">📍</span>
-                  <input className="form-input location-name-input" type="text" value={locationName} onChange={(e) => setLocationName(e.target.value)} placeholder="장소 이름" aria-label="선택한 장소 이름" />
-                </div>
-                <div className="location-edit-hint">장소 이름만 바꾸고 싶다면 여기서 일부 단어를 수정하세요. 지도 위치는 그대로 유지됩니다.</div>
-              </div>
-
-              <label className="form-label" htmlFor="location-search">다른 장소로 변경</label>
-              <div className="location-search">
-                <input id="location-search" className="form-input" type="text" value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} placeholder="장소 이름을 입력하세요" autoComplete="off" />
-                <button type="button" className="location-search-button" onClick={() => searchLocation(searchKeyword)}>검색</button>
-              </div>
-              <div className="location-search-hint">장소 이름을 입력하면 검색 결과가 나타나요.</div>
-
-              {searchResults.length > 0 && searchKeyword.trim() !== locationName.trim() && (
-                <div className="location-search-panel">
-                  <div className="location-results-section">
-                    <div className="location-suggestion-heading">장소</div>
-                    <div className="location-suggestion-list" role="listbox" aria-label="검색된 장소">
-                      {searchResults.map((res, i) => (
-                        <button
-                          type="button"
-                          key={`${res.id || res.place_name}-${i}`}
-                          className="location-suggestion-item"
-                          onClick={() => {
-                            handleSearchResultClick(res);
-                            setSearchKeyword(res.place_name);
-                          }}
-                        >
-                          <span className="location-suggestion-pin">📍</span>
-                          <span className="location-suggestion-content">
-                            <strong>{res.place_name}</strong>
-                            <small>{res.road_address_name || res.address_name}</small>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
+              {favoriteLocations.length > 0 && (
+                <div className="favorite-location-block">
+                  <div className="favorite-location-heading">자주 쓰는 장소</div>
+                  <div className="favorite-location-list">
+                    {favoriteLocations.map((favorite) => (
+                      <button key={favorite.id} type="button" className="favorite-location-chip" onClick={() => chooseFavoriteLocation(favorite)}>
+                        <span>★ {favorite.name}</span><span className="favorite-location-remove" role="button" tabIndex={0} aria-label={`${favorite.name} 즐겨찾기 삭제`} onClick={(event) => deleteFavoriteLocation(event, favorite.id)}>×</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
+              <div className="selected-location-edit-card"><div className="selected-location-edit-label">선택한 장소</div><div className="location-name-edit-row"><span className="selected-location-icon">📍</span><input className="form-input location-name-input" type="text" value={locationName} onChange={(e) => setLocationName(e.target.value)} placeholder="장소 이름" aria-label="선택한 장소 이름" /></div><div className="location-edit-hint">장소 이름만 바꾸고 싶다면 여기서 일부 단어를 수정하세요. 지도 위치는 그대로 유지됩니다.</div>{selectedLocation && locationName.trim() && <button type="button" className="favorite-location-save" onClick={saveFavoriteLocation}>★ 자주 쓰는 장소로 저장</button>}</div>
 
+              <label className="form-label" htmlFor="location-search">다른 장소로 변경</label>
+              <div className="location-search"><input id="location-search" className="form-input" type="text" value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} placeholder="장소 이름을 입력하세요" autoComplete="off" /><button type="button" className="location-search-button" onClick={() => searchLocation(searchKeyword)}>검색</button></div>
+              <div className="location-search-hint">장소 이름을 입력하면 검색 결과가 나타나요.</div>
+
+              {searchResults.length > 0 && searchKeyword.trim() !== locationName.trim() && <div className="location-search-panel"><div className="location-results-section"><div className="location-suggestion-heading">장소</div><div className="location-suggestion-list" role="listbox" aria-label="검색된 장소">{searchResults.map((res, i) => <button type="button" key={`${res.id || res.place_name}-${i}`} className="location-suggestion-item" onClick={() => { handleSearchResultClick(res); setSearchKeyword(res.place_name); }}><span className="location-suggestion-pin">📍</span><span className="location-suggestion-content"><strong>{res.place_name}</strong><small>{res.road_address_name || res.address_name}</small></span></button>)}</div></div></div>}
               <div ref={mapRef} className="task-map" />
             </div>
           </div>
 
           <div className="modal-actions">
             {taskId !== null && <button type="button" className="modal-button danger" onClick={() => initialData.onDelete(taskId)}>삭제</button>}
-            <div className="modal-actions-right">
-              <button type="button" className="modal-button secondary" onClick={onClose}>닫기</button>
-              <button type="submit" className="modal-button primary">{taskId !== null ? '수정 완료' : '추가하기'}</button>
-            </div>
+            <div className="modal-actions-right"><button type="button" className="modal-button secondary" onClick={onClose}>닫기</button><button type="submit" className="modal-button primary">{taskId !== null ? '수정 완료' : recurrenceType === 'none' ? '추가하기' : `${recurrenceCount}개 추가`}</button></div>
           </div>
         </form>
       </div>
@@ -262,27 +261,10 @@ function applyDuration(minutes, startDate, startTime, setEndDate, setEndTime) {
   const end = new Date(start.getTime() + minutes * 60000);
   const local = new Date(end.getTime() - end.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   const [date, time] = local.split('T');
-  setEndDate(date);
-  setEndTime(time);
+  setEndDate(date); setEndTime(time);
 }
-
-function formatScheduleDateRange(startDate, endDate) {
-  if (!startDate) return '날짜 미지정';
-  const startText = formatScheduleDate(startDate);
-  if (!endDate || endDate === startDate) return startText;
-  return `${startText} → ${formatScheduleDate(endDate)}`;
-}
-
-function formatScheduleDate(value) {
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
-}
-
-function formatDuration(seconds) {
-  const minutes = Math.max(0, Math.ceil((seconds || 0) / 60));
-  if (minutes < 60) return `${minutes}분`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest ? `${hours}시간 ${rest}분` : `${hours}시간`;
-}
+function safeParseLocation(value) { try { return JSON.parse(value); } catch { return null; } }
+function formatScheduleDateRange(startDate, endDate) { if (!startDate) return '날짜 미지정'; const startText = formatScheduleDate(startDate); if (!endDate || endDate === startDate) return startText; return `${startText} → ${formatScheduleDate(endDate)}`; }
+function formatScheduleDate(value) { const date = new Date(`${value}T00:00:00`); if (Number.isNaN(date.getTime())) return value; return date.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }); }
+function formatDateTime(value) { const date = new Date(value); if (Number.isNaN(date.getTime())) return ''; return date.toLocaleString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }); }
+function formatDuration(seconds) { const minutes = Math.max(0, Math.ceil((seconds || 0) / 60)); if (minutes < 60) return `${minutes}분`; const hours = Math.floor(minutes / 60); const rest = minutes % 60; return rest ? `${hours}시간 ${rest}분` : `${hours}시간`; }

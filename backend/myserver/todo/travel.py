@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import timedelta
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -104,10 +105,8 @@ def calculate_travel_warnings(tasks):
     logger.info("Travel warning check: %s tasks", len(ordered))
 
     for previous, next_task in zip(ordered, ordered[1:]):
-        # Once the next schedule has already started, the warning can no longer help the user.
         if next_task.date <= now:
             continue
-
         if not previous.end or not previous.location or not next_task.location:
             continue
 
@@ -125,6 +124,7 @@ def calculate_travel_warnings(tasks):
                 "travel_seconds": 0,
                 "distance_meters": 0,
                 "deficit_seconds": abs(gap_seconds),
+                "recommended_departure_at": None,
                 "reason": "overlap",
             })
             continue
@@ -138,12 +138,14 @@ def calculate_travel_warnings(tasks):
 
         deficit = route["duration"] - gap_seconds
         if deficit > 0:
+            recommended_departure_at = next_task.date - timedelta(seconds=route["duration"])
             warnings.append({
                 **warning_base,
                 "available_seconds": gap_seconds,
                 "travel_seconds": route["duration"],
                 "distance_meters": route["distance"],
                 "deficit_seconds": deficit,
+                "recommended_departure_at": recommended_departure_at.isoformat(),
                 "reason": "travel_time",
             })
 

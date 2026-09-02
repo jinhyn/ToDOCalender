@@ -2,7 +2,7 @@ import json
 
 from rest_framework import serializers
 
-from .models import Category, Task
+from .models import Category, FavoriteLocation, Task
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -55,6 +55,28 @@ class TaskSerializer(serializers.ModelSerializer):
     def validate_location(self, value):
         if isinstance(value, dict):
             return json.dumps(value, ensure_ascii=False)
+        return value
+
+    def create(self, validated_data):
+        validated_data["user"] = self.context["request"].user
+        return super().create(validated_data)
+
+
+class FavoriteLocationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FavoriteLocation
+        fields = ["id", "name", "location", "address", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+    def validate_location(self, value):
+        if isinstance(value, dict):
+            return json.dumps(value, ensure_ascii=False)
+        try:
+            parsed = json.loads(value)
+            float(parsed["lat"])
+            float(parsed["lng"])
+        except (TypeError, ValueError, KeyError, json.JSONDecodeError) as exc:
+            raise serializers.ValidationError("location must contain lat and lng coordinates.") from exc
         return value
 
     def create(self, validated_data):

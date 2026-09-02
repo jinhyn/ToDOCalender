@@ -1,12 +1,14 @@
 import logging
 
 from django.db import transaction
+from django.db.models import Q
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from .models import Category, Task
-from .serializers import CategorySerializer, TaskSerializer
+from .models import Category, FavoriteLocation, Task
+from .serializers import CategorySerializer, FavoriteLocationSerializer, TaskSerializer
 from .travel import calculate_travel_warnings
 
 
@@ -54,11 +56,20 @@ class TaskViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Task.objects.filter(user=self.request.user).select_related("category")
+        queryset = Task.objects.filter(user=self.request.user).select_related("category")
+        query = self.request.query_params.get("q", "").strip()
+        if query:
+            queryset = queryset.filter(
+                Q(title__icontains=query)
+                | Q(location_name__icontains=query)
+                | Q(category__name__icontains=query)
+            )
+        return queryset
 
     @action(detail=False, methods=["get"], url_path="travel-warnings")
     def travel_warnings(self, request):
-        tasks = list(self.get_queryset().order_by("date", "id"))
+        # Do not apply the optional task search filter to travel-safety calculations.
+        tasks = list(Task.objects.filter(user=request.user).select_related("category").order_by("date", "id"))
         logger.info("Travel warning check: task_count=%d", len(tasks))
 
         if len(tasks) < 2:
@@ -67,3 +78,27 @@ class TaskViewSet(viewsets.ModelViewSet):
         warnings = calculate_travel_warnings(tasks)
         logger.info("Travel warning result: warning_count=%d", len(warnings))
         return Response({"warnings": warnings})
+
+
+class FavoriteLocationViewSet(viewsets.ModelViewSet):
+    serializer_class = FavoriteLocationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return FavoriteLocation.objects.filter(user=self.request.user)
+
+
+class AccountView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        return Response({
+            "task_count": Task.objects.filter(user=request.user).count(),
+            "category_count": Category.objects.filter(user=request.user).count(),
+            "favorite_location_count": FavoriteLocation.objects.filter(user=request.user).count(),
+        })
+
+    def delete(self, request):
+        user = request.user
+        user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
